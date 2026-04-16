@@ -50,7 +50,7 @@ export default function FacultyCourseDashboard() {
 
   // ================= DATA =================
   const courseData = useMemo(() => {
-    return courses.map(c => ({
+    return (courses || []).map(c => ({
       name: c.name,
       students: c.students || 0,
     }));
@@ -104,7 +104,7 @@ export default function FacultyCourseDashboard() {
               <YAxis />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="students" radius={[8, 8, 0, 0]}>
-                {courseData.map((entry, i) => (
+                {(courseData || []).map((entry, i) => (
                   <Cell key={i} fill={colors[i % colors.length]} />
                 ))}
               </Bar>
@@ -132,7 +132,7 @@ export default function FacultyCourseDashboard() {
         </div>
 
         <div className="space-y-4">
-          {recentCourses.map((c, i) => (
+          {(recentCourses || []).map((c, i) => (
             <div key={i} className="flex items-center justify-between p-5 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-md transition-all">
 
               <div className="flex items-center gap-5">

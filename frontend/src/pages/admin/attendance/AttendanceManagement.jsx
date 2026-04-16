@@ -1,7 +1,7 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import AdminLayout from "../../../layouts/AdminLayout";
-import { CheckCircle, Calendar, AlertCircle, User, Search, RotateCcw, ChevronLeft, ChevronRight, MoreHorizontal, X, ArrowUpDown } from "lucide-react";
+import { CheckCircle, Calendar, AlertCircle, User, Search, RotateCcw, ChevronLeft, ChevronRight, MoreHorizontal, X, ArrowUpDown, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   flexRender,
@@ -11,31 +11,65 @@ import {
 } from "@tanstack/react-table";
 
 import { useAdminData } from "../../../context/AdminDataContext";
+import { useAuth } from "../../../context/AuthContext";
 import { InfinityLoader } from "../../../components/ui/loader-13";
 import { cardVariants, buttonVariants, staggerContainer, tableRowVariants } from "../../../utils/motion";
 
+const API = "http://localhost:8000";
+
 export default function AttendanceManagement({noLayout = false, hideStats = false }) {
-  const { students: ALL_STUDENTS, attendanceLogs: ATTENDANCE_LOGS, setAttendanceLogs } = useAdminData();
+  const { students: ALL_STUDENTS, courses } = useAdminData();
+  const { getToken } = useAuth();
   const [currentPage, setCurrentPage] = useState(1);
   const [sorting, setSorting] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const itemsPerPage = 7;
-  const [isLoading, setIsLoading] = useState(false);
-  const isInitialMount = useRef(true);
+
+  // Attendance data fetched from API (replaces ATTENDANCE_LOGS context)
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [fetchingAttendance, setFetchingAttendance] = useState(false);
 
   // Filter States
   const [filters, setFilters] = useState({
-    date: "2026-04-12", // Default to the latest date in our mock history
+    date: new Date().toISOString().split('T')[0],
     institute: "",
     course: "",
     status: "All Status",
     search: ""
   });
 
+  // Fetch attendance from API whenever date or course changes
+  const fetchAttendance = useCallback(async () => {
+    const token = getToken();
+    if (!token || !filters.date) return;
+
+    setFetchingAttendance(true);
+    try {
+      let url = `${API}/attendance/?selected_date=${filters.date}`;
+      if (filters.course) url += `&course=${encodeURIComponent(filters.course)}`;
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAttendanceData(data);
+      } else {
+        setAttendanceData([]);
+      }
+    } catch (err) {
+      console.error('[AttendanceManagement] Fetch error:', err);
+    } finally {
+      setFetchingAttendance(false);
+    }
+  }, [filters.date, filters.course, getToken]);
+
+  useEffect(() => { fetchAttendance(); }, [fetchAttendance]);
+
   const handleReset = () => {
-    setIsLoading(true);
     setFilters({
-      date: "2026-04-12",
+      date: new Date().toISOString().split('T')[0],
       institute: "",
       course: "",
       status: "All Status",
@@ -43,84 +77,48 @@ export default function AttendanceManagement({noLayout = false, hideStats = fals
     });
     setSelectedStudent(null);
     setCurrentPage(1);
-
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1700);
   };
 
-  // Trigger loading on any relevant filter change
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
 
-    // Capture current values to check if everything is empty/default (handled by reset separately)
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1700);
 
-    return () => clearTimeout(timer);
-  }, [filters.date, filters.institute, filters.course, filters.status, filters.search]);
 
-  // 3. Dynamic Calculation Logic
+  // Stats computed from API attendance data
   const stats = useMemo(() => {
     const totalStudentsCount = ALL_STUDENTS.length;
+    const presentToday = attendanceData.filter(r => r.status === 'PRESENT').length;
+    const absentToday = attendanceData.filter(r => r.status === 'ABSENT').length;
+    const marked = attendanceData.length;
+    const todayPercentage = marked > 0 ? ((presentToday / marked) * 100).toFixed(1) : "0.0";
+    const absentPercentage = marked > 0 ? ((absentToday / marked) * 100).toFixed(1) : "0.0";
+    return { totalStudentsCount, presentToday, absentToday, todayPercentage, monthlyAverage: todayPercentage, absentPercentage };
+  }, [attendanceData, ALL_STUDENTS]);
 
-    // TODAY'S ATTENDANCE: Calculate using today's date data (filters.date)
-    const todayLogs = ATTENDANCE_LOGS.filter(l => l.date === filters.date);
-    const presentToday = todayLogs.filter(l => l.status === "Present").length;
-    const todayPercentage = totalStudentsCount > 0 ? ((presentToday / totalStudentsCount) * 100).toFixed(1) : "0.0";
-
-    // THIS MONTH'S AVERAGE: Calculate average attendance for current month
-    const currentMonthPrefix = filters.date.substring(0, 7); // "2026-04"
-    const monthLogs = ATTENDANCE_LOGS.filter(l => l.date.startsWith(currentMonthPrefix));
-    const uniqueDates = [...new Set(monthLogs.map(l => l.date))];
-
-    let totalDailyPercentage = 0;
-    uniqueDates.forEach(date => {
-      const dayLogs = monthLogs.filter(l => l.date === date);
-      const dayPresent = dayLogs.filter(l => l.status === "Present").length;
-      totalDailyPercentage += (dayPresent / totalStudentsCount) * 100;
-    });
-
-    const monthlyAverage = uniqueDates.length > 0 ? (totalDailyPercentage / uniqueDates.length).toFixed(1) : "0.0";
-
-    // ABSENT TODAY: Calculate total students - present today
-    const absentToday = totalStudentsCount - presentToday;
-    const absentPercentage = totalStudentsCount > 0 ? ((absentToday / totalStudentsCount) * 100).toFixed(1) : "0.0";
-
-    return {
-      totalStudentsCount,
-      presentToday,
-      absentToday,
-      todayPercentage,
-      monthlyAverage,
-      absentPercentage
-    };
-  }, [filters.date]);
-
-  // 4. Derive students list for table based on selected date and other filters
+  // Build student rows from API attendance data
   const filteredStudents = useMemo(() => {
-
-    const dateRecords = ATTENDANCE_LOGS.filter(l => l.date === filters.date);
-
-    return ALL_STUDENTS.map(s => {
-      const record = dateRecords.find(r => r.studentId === s.studentId) || { status: "Not Marked", checkIn: "-", remarks: "-" };
-      return { ...s, ...record };
-    }).filter(s => {
-      const matchesInstitute = !filters.institute || s.institute === filters.institute;
-      const matchesCourse = !filters.course || s.course === filters.course;
-      const matchesStatus = filters.status === "All Status" || s.status === filters.status;
-      const matchesSearch = !filters.search ||
-        s.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-        s.studentId.toLowerCase().includes(filters.search.toLowerCase());
-
-      return matchesInstitute && matchesCourse && matchesStatus && matchesSearch;
-    });
- }, [filters, ALL_STUDENTS, ATTENDANCE_LOGS]);
+    // Map attendance API response into student rows
+    return attendanceData
+      .filter(r => {
+        const matchesInstitute = !filters.institute || r.institute === filters.institute;
+        const matchesStatus = filters.status === "All Status" ||
+          (filters.status === "Present" && r.status === "PRESENT") ||
+          (filters.status === "Absent" && r.status === "ABSENT");
+        const matchesSearch = !filters.search ||
+          r.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+          r.student_id.toLowerCase().includes(filters.search.toLowerCase());
+        return matchesInstitute && matchesStatus && matchesSearch;
+      })
+      .map(r => ({
+        studentId: r.student_id,
+        name: r.name,
+        phone: r.phone || '',
+        institute: r.institute || '',
+        course: r.course || '',
+        admissionDate: '',
+        // Normalize to mixed-case for UI display
+        status: r.status === 'PRESENT' ? 'Present' : r.status === 'ABSENT' ? 'Absent' : 'Not Marked',
+        avatar: `https://i.pravatar.cc/150?u=${r.student_id}`,
+      }));
+  }, [attendanceData, filters]);
 
   // Column definitions for TanStack Table
   const columns = useMemo(() => [
@@ -253,13 +251,9 @@ const content = (
             <DropdownFilter
               label="Institute"
               val={filters.institute}
-              setVal={(v) => {
-                const newCourses = v === "GIT" ? ["B-Tech (CS)", "B-Tech (CSE)", "B-Tech (AI)"] :
-                  v === "GICSA" ? ["BSC (IT)", "MSC (IT) INT", "BCA"] : [];
-                setFilters({ ...filters, institute: v, course: newCourses[0] || "" });
-              }}
+              setVal={(v) => setFilters({ ...filters, institute: v, course: "" })}
               options={["GIT", "GICSA"]}
-              placeholder="Select Institute"
+              placeholder="All Institutes"
               disabled={!filters.date}
               className="flex-1 min-w-[140px]"
             />
@@ -268,10 +262,11 @@ const content = (
               label="Course"
               val={filters.course}
               setVal={(v) => setFilters({ ...filters, course: v })}
-              options={filters.institute === "GIT" ? ["B-Tech (CS)", "B-Tech (CSE)", "B-Tech (AI)"] :
-                filters.institute === "GICSA" ? ["BSC (IT)", "MSC (IT) INT", "BCA"] : []}
-              disabled={!filters.date || !filters.institute}
-              placeholder="Select Course"
+              options={(courses || [])
+                .filter(c => !filters.institute || c.institute === filters.institute)
+                .map(c => c.name)}
+              disabled={!filters.date}
+              placeholder="All Courses"
               className="flex-1 min-w-[140px]"
             />
           </div>
@@ -317,7 +312,7 @@ const content = (
           </div>
 
           <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
-            {isLoading ? (
+            {fetchingAttendance ? (
               <div className="py-24 flex flex-col items-center justify-center bg-slate-50/5 animate-in fade-in duration-500">
                 <InfinityLoader size={80} className="[&>svg>path:last-child]:stroke-[#0284c7] [&>svg>path:last-child]:drop-shadow-[0_0_12px_rgba(2,132,199,0.2)]" />
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-8 flex items-center gap-2">
@@ -331,7 +326,7 @@ const content = (
                 <thead>
                   {table.getHeaderGroups().map(headerGroup => (
                     <tr key={headerGroup.id} className="bg-[#f8fafc]">
-                      {headerGroup.headers.map(header => (
+                      {(headerGroup.headers || []).map(header => (
                         <th key={header.id} className="py-4 md:py-5 px-6 md:px-8 text-[10px] font-bold text-[#94a3b8] uppercase tracking-widest">
                           {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                         </th>
@@ -341,7 +336,7 @@ const content = (
                 </thead>
                 <tbody className="divide-y divide-[#f1f5f9]">
                   {currentStudentsRows.length > 0 ? (
-                    currentStudentsRows.map((row) => (
+                    (currentStudentsRows || []).map((row) => (
                       <tr
                         key={row.id}
                         onClick={() => setSelectedStudent(row.original)}
@@ -476,7 +471,7 @@ function DropdownFilter({ label, val, setVal, options, placeholder, disabled, cl
           className={`w-full bg-white border border-[#f1f5f9] rounded-xl px-4 py-2.5 text-[14px] font-medium text-[#0f172a] appearance-none focus:ring-4 focus:ring-[#0284c7]/10 focus:border-[#0284c7] transition-all outline-none pr-10 ${disabled ? 'opacity-50 cursor-not-allowed border-none bg-slate-50' : ''}`}
         >
           {placeholder && <option value="" hidden>{placeholder}</option>}
-          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          {(options || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
         </select>
         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
       </div>
@@ -485,8 +480,26 @@ function DropdownFilter({ label, val, setVal, options, placeholder, disabled, cl
 }
 
 function StudentModal({ isOpen, student, onClose }) {
-  const { attendanceLogs: ATTENDANCE_LOGS } = useAdminData();
-  const [viewDate, setViewDate] = useState(new Date(2026, 3)); // Default to April 2026
+  const { getToken } = useAuth();
+  const [viewDate, setViewDate] = useState(new Date(2026, 3));
+  const [studentRecords, setStudentRecords] = useState([]);
+
+  // Fetch from GET /attendance/student/:id when student changes
+  useEffect(() => {
+    if (!student) return;
+    const token = getToken();
+    if (!token) return;
+
+    fetch(`${API}/attendance/student/${student.studentId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        console.log('[Calendar] Student attendance records:', data.length);
+        setStudentRecords(data);
+      })
+      .catch(() => setStudentRecords([]));
+  }, [student]);
 
   const viewMonth = viewDate.getMonth();
   const viewYear = viewDate.getFullYear();
@@ -497,39 +510,39 @@ function StudentModal({ isOpen, student, onClose }) {
   };
 
   const nextMonth = () => {
-    if (viewYear === 2026 && viewMonth === 3) return;
+    if (viewYear === 2026 && viewMonth === 11) return;
     setViewDate(new Date(viewYear, viewMonth + 1));
   };
 
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-  // Generate dynamic calendar
+  // Generate dynamic calendar from real DB records
   const monthDays = useMemo(() => {
     if (!student) return [];
     const days = [];
     const firstDay = new Date(viewYear, viewMonth, 1);
     const lastDay = new Date(viewYear, viewMonth + 1, 0).getDate();
-
-    // Adjust startOffset for Monday start: Mon(0), Tue(1)... Sun(6)
     const startOffset = (firstDay.getDay() + 6) % 7;
 
     for (let i = 0; i < startOffset; i++) days.push(null);
 
     for (let d = 1; d <= lastDay; d++) {
       const dateStr = `${viewYear}-${(viewMonth + 1).toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
-      const log = ATTENDANCE_LOGS.find(l => l.studentId === student.studentId && l.date === dateStr);
+      // Backend returns { date: "2026-04-16", status: "PRESENT" }
+      const record = studentRecords.find(r => {
+        const rDate = typeof r.date === 'string' ? r.date : String(r.date);
+        return rDate === dateStr;
+      });
 
       let status = 'Other';
-      if (log) status = log.status;
-      else {
-        const curDate = new Date(viewYear, viewMonth, d);
-        if (curDate.getDay() === 0) status = 'Other';
+      if (record) {
+        status = record.status === 'PRESENT' ? 'Present' : 'Absent';
       }
 
       days.push({ day: d, status });
     }
     return days;
-  }, [student, ATTENDANCE_LOGS, viewMonth, viewYear]);
+  }, [student, studentRecords, viewMonth, viewYear]);
 
   if (!isOpen || !student) return null;
 
@@ -585,7 +598,7 @@ function StudentModal({ isOpen, student, onClose }) {
             </div>
 
             <div className="grid grid-cols-7 gap-2">
-              {monthDays.map((d, index) => (
+              {(monthDays || []).map((d, index) => (
                 <div key={index} className="aspect-square flex items-center justify-center">
                   {!d ? null : (
                     <div className={`w-full aspect-square rounded-[8px] flex items-center justify-center text-[10px] font-bold transition-all shadow-sm ${d.status === 'Present' ? 'bg-emerald-500 text-white' :

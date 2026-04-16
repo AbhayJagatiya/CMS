@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { User, Lock, ArrowRight, GraduationCap, ShieldCheck, Briefcase } from "lucide-react";
+import { User, Lock, ArrowRight, GraduationCap, ShieldCheck, Briefcase, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { SpecialText } from "../../components/ui/special-text";
 
@@ -9,6 +9,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [activeRole, setActiveRole] = useState("admin"); // 'admin' or 'faculty'
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
@@ -20,54 +21,36 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    
-    const isAdminEmail = email === "Admin@gmail.com";
-    const isFacultyEmail = ["Student@gmail.com", "Attendance@gmail.com", "Course@gmail.com", "Fees@gmail.com"].includes(email);
 
-    if (activeRole === 'admin' && !isAdminEmail) {
-      setError("Unauthorized access. Admin credentials required.");
+    // Map UI role toggle → backend RoleEnum value
+    const backendRole = activeRole === 'admin' ? 'ADMIN' : 'FACULTY';
+
+    const result = await login(email, password, backendRole);
+
+    if (result.success) {
+      setLoginSuccess(true);
       setLoading(false);
-      return;
-    }
 
-    if (activeRole === 'faculty' && !isFacultyEmail) {
-      setError("Unauthorized access. Faculty credentials required.");
+      setTimeout(() => {
+        const role = result.role;
+        if (role === 'admin') {
+          navigate('/admin');
+        } else if (role === 'faculty-1') {
+          navigate('/faculty/student-module');
+        } else if (role === 'faculty-2') {
+          navigate('/faculty/attendance-module');
+        } else if (role === 'faculty-3') {
+          navigate('/faculty/course-module');
+        } else if (role === 'faculty-4') {
+          navigate('/faculty/fees-module');
+        } else {
+          navigate('/faculty/student-module');
+        }
+      }, 2500);
+    } else {
+      setError(result.error || "Invalid credentials");
       setLoading(false);
-      return;
     }
-
-    setTimeout(() => {
-      const success = login(email, password);
-      
-      if (success) {
-        setLoginSuccess(true);
-        setLoading(false);
-
-        // Transition duration ~2.5s
-        setTimeout(() => {
-          // Redirection logic based on role
-          if (activeRole === 'admin') {
-            navigate('/admin');
-          } else {
-            // Check for specialized faculty routes
-            if (email === "Student@gmail.com") {
-              navigate('/faculty/student-module');
-            } else if (email === "Attendance@gmail.com") {
-              navigate('/faculty/attendance-module');
-            } else if (email === "Course@gmail.com") {
-              navigate('/faculty/course-module');
-            } else if (email === "Fees@gmail.com") {
-              navigate('/faculty/fees-module');
-            } else {
-              navigate('/faculty/dashboard');
-            }
-          }
-        }, 2500);
-      } else {
-        setError("Invalid security key. Please check your credentials.");
-        setLoading(false);
-      }
-    }, 800);
   };
 
   if (loginSuccess) {
@@ -177,14 +160,21 @@ export default function LoginPage() {
              <div className="relative group">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline transition-colors group-focus-within:text-primary" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-[#f8fafc] border border-[#f1f5f9] rounded-xl px-4 py-2.5 pl-10 text-[14px] font-medium focus:ring-4 focus:ring-[#0284c7]/10 focus:border-[#0284c7] outline-none placeholder:text-[#94a3b8] transition-all"
+                  className="w-full bg-[#f8fafc] border border-[#f1f5f9] rounded-xl px-4 py-2.5 pl-10 pr-10 text-[14px] font-medium focus:ring-4 focus:ring-[#0284c7]/10 focus:border-[#0284c7] outline-none placeholder:text-[#94a3b8] transition-all"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors focus:outline-none"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
              </div>
           </div>
 

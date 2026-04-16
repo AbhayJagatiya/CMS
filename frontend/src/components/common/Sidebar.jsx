@@ -103,7 +103,7 @@ export default function Sidebar({ onClose }) {
         </div>
 
         <nav className="space-y-1">
-          {navItems.map((item) => {
+          {(navItems || []).map((item) => {
             const isActive = item.path !== '#' && (location.pathname === item.path || (item.path === '/faculty/dashboard' && location.pathname.includes('/faculty/dashboard')));
             return (
               <motion.button

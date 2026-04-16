@@ -67,7 +67,7 @@ export default function FacultyFeesDashboard() {
   const trendData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr'];
 
-    return months.map((m, i) => ({
+    return (months || []).map((m, i) => ({
       name: m,
       collection: fees.reduce((sum, f) => {
         const monthly = (f.history || []).filter(h =>
@@ -131,7 +131,7 @@ export default function FacultyFeesDashboard() {
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie data={statusData} dataKey="value">
-                {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                {(statusData || []).map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
               <Legend />
@@ -173,7 +173,7 @@ export default function FacultyFeesDashboard() {
 
             {/* BODY */}
             <tbody className="divide-y divide-slate-50">
-              {recentTransactions.map((tx, idx) => (
+              {(recentTransactions || []).map((tx, idx) => (
                 <tr
                   key={`${tx.studentId}-${idx}`}
                   className="group hover:bg-slate-50 transition-all"

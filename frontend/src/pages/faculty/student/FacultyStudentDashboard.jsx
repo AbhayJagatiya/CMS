@@ -133,7 +133,7 @@ export default function FacultyStudentDashboard() {
                 <YAxis />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="students" radius={[8, 8, 0, 0]}>
-                  {courseData.map((entry, i) => (
+                  {(courseData || []).map((entry, i) => (
                     <Cell key={i} fill={colors[i % colors.length]} />
                   ))}
                 </Bar>
@@ -157,7 +157,7 @@ export default function FacultyStudentDashboard() {
                   outerRadius={100}
                   dataKey="value"
                 >
-                  {statusData.map((entry, i) => (
+                  {(statusData || []).map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
@@ -188,7 +188,7 @@ export default function FacultyStudentDashboard() {
         </div>
 
         <div className="space-y-4">
-          {recentStudents.map((s, i) => (
+          {(recentStudents || []).map((s, i) => (
             <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-md transition-all">
 
               <div className="flex items-center gap-4">

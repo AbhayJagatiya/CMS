@@ -35,12 +35,12 @@ const StatCard = ({ title, value, icon: Icon }) => (
 export default function FacultyAttendanceDashboard() {
   const { students, attendanceLogs, attendanceTrends } = useAdminData(); // :contentReference[oaicite:0]{index=0}
 
-  // ================= STATS =================
+  // STATS
   const stats = useMemo(() => {
     const totalLogs = attendanceLogs.length;
-    const uniqueDates = [...new Set(attendanceLogs.map(l => l.date))];
+    const uniqueDates = [...new Set((attendanceLogs || []).map(l => l.date))];
 
-    const presentCount = attendanceLogs.filter(l => l.status === "Present").length;
+    const presentCount = attendanceLogs.filter(l => l.status === "PRESENT").length;
     const avgPercentage = totalLogs > 0
       ? ((presentCount / totalLogs) * 100).toFixed(1)
       : "0.0";
@@ -51,28 +51,28 @@ export default function FacultyAttendanceDashboard() {
     if (uniqueDates.length > 0) {
       const latestDate = uniqueDates.sort((a, b) => new Date(b) - new Date(a))[0];
       const todayLogs = attendanceLogs.filter(l => l.date === latestDate);
-      presentToday = todayLogs.filter(l => l.status === "Present").length;
+      presentToday = todayLogs.filter(l => l.status === "PRESENT").length;
       absentToday = todayLogs.length - presentToday;
     }
 
     return { totalLogs, avgPercentage, presentToday, absentToday };
   }, [attendanceLogs]);
 
-  // ================= TOP STUDENTS =================
+  // TOP STUDENTS
   const studentAttendance = useMemo(() => {
     const map = {};
 
     attendanceLogs.forEach(log => {
-      if (!map[log.studentId]) map[log.studentId] = { present: 0, total: 0 };
-      map[log.studentId].total += 1;
-      if (log.status === 'Present') map[log.studentId].present += 1;
+      if (!map[log.student_id]) map[log.student_id] = { present: 0, total: 0 };
+      map[log.student_id].total += 1;
+      if (log.status === 'PRESENT') map[log.student_id].present += 1;
     });
 
     return students
       .map(s => {
-        const stats = map[s.studentId] || { present: 0, total: 0 };
-        const percentage = stats.total > 0
-          ? ((stats.present / stats.total) * 100).toFixed(1)
+        const studentStats = map[s.studentId] || { present: 0, total: 0 };
+        const percentage = studentStats.total > 0
+          ? ((studentStats.present / studentStats.total) * 100).toFixed(1)
           : 0;
 
         return { ...s, percentage: Number(percentage) };
@@ -81,13 +81,13 @@ export default function FacultyAttendanceDashboard() {
       .slice(0, 5);
   }, [students, attendanceLogs]);
 
-  // ================= RECENT =================
+  // RECENT
   const recentLogs = useMemo(() => {
     return [...attendanceLogs]
       .reverse()
       .slice(0, 5)
       .map(log => {
-        const student = students.find(s => s.studentId === log.studentId);
+        const student = students.find(s => s.studentId === (log.student_id || log.studentId));
         return {
           ...log,
           studentName: student?.name || "Unknown",
@@ -163,7 +163,7 @@ export default function FacultyAttendanceDashboard() {
         </h4>
 
         <div className="space-y-4">
-          {studentAttendance.map((s, i) => (
+          {(studentAttendance || []).map((s, i) => (
             <div key={i} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border hover:bg-white hover:shadow-md transition-all">
               <div>
                 <p className="text-sm font-black">{s.name}</p>
@@ -189,7 +189,7 @@ export default function FacultyAttendanceDashboard() {
         </div>
 
         <div className="space-y-4">
-          {recentLogs.map((log, i) => (
+          {(recentLogs || []).map((log, i) => (
             <div key={i} className="flex justify-between p-4 bg-slate-50 rounded-2xl hover:bg-white hover:shadow-md transition-all">
               <div>
                 <p className="font-black">{log.studentName}</p>

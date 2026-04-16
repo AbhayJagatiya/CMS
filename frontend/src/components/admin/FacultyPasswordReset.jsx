@@ -68,7 +68,7 @@ export default function FacultyPasswordReset() {
                   className="w-full bg-white border border-[#f1f5f9] rounded-xl px-4 py-2.5 text-[14px] font-medium outline-none cursor-pointer appearance-none transition-all focus:ring-4 focus:ring-[#0284c7]/10 focus:border-[#0284c7] text-[#0f172a]"
                 >
                   <option value="">Select a faculty member...</option>
-                  {faculties.map(f => (
+                  {(faculties || []).map(f => (
                     <option key={f.id} value={f.id}>{f.name} ({f.email})</option>
                   ))}
                 </select>

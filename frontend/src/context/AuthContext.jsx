@@ -1,6 +1,24 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState } from 'react';
+import api from '../lib/api';
 
 const AuthContext = createContext();
+
+// Map backend role → frontend role key used for routing
+const ROLE_MAP = {
+  ADMIN: "admin",
+  STUDENT_MANAGER: "faculty-1",
+  ATTENDANCE_MANAGER: "faculty-2",
+  COURSE_MANAGER: "faculty-3",
+  FEES_MANAGER: "faculty-4",
+};
+
+// Map backend role → human-readable module name
+const MODULE_MAP = {
+  STUDENT_MANAGER: "Student Management",
+  ATTENDANCE_MANAGER: "Attendance Management",
+  COURSE_MANAGER: "Course Management",
+  FEES_MANAGER: "Fees Management",
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
@@ -8,41 +26,36 @@ export const AuthProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const login = (email, password) => {
-    let userData = null;
-    // Admin
-    if (email === "Admin@gmail.com" && password === "Admin123") {
-      userData = { 
-        email, 
-        role: 'admin', 
-        name: 'System Admin',
-        avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-      };
-    }
-    // Faculty 1: Student
-    else if (email === "Student@gmail.com" && password === "Student123") {
-      userData = { email, role: 'faculty-1', name: 'Faculty 1', module: 'Student Management' };
-    }
-    // Faculty 2: Attendance
-    else if (email === "Attendance@gmail.com" && password === "Attendance123") {
-      userData = { email, role: 'faculty-2', name: 'Faculty 2', module: 'Attendance Management' };
-    }
-    // Faculty 3: Course
-    else if (email === "Course@gmail.com" && password === "Course123") {
-      userData = { email, role: 'faculty-3', name: 'Faculty 3', module: 'Course Management' };
-    }
-    // Faculty 4: Fees
-    else if (email === "Fees@gmail.com" && password === "Fees123") {
-      userData = { email, role: 'faculty-4', name: 'Faculty 4', module: 'Fees Management' };
-    }
+  // Login via backend API
+  const login = async (email, password, selectedRole) => {
+    try {
+      const res = await api.post('/auth/login', {
+        email: email.toLowerCase(),
+        password,
+        role: selectedRole, // "ADMIN" or "FACULTY"
+      });
 
-    if (userData) {
+      const data = res.data; // { access_token, token_type, role }
+
+      const frontendRole = ROLE_MAP[data.role] || "admin";
+      const userData = {
+        email: data.email,
+        role: frontendRole,
+        backendRole: data.role,
+        name: data.name,
+        token: data.access_token,
+      };
+
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
-      return true;
+      return { success: true, role: frontendRole };
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || "Invalid credentials or server error";
+      return { success: false, error: errorMsg };
     }
-    return false;
   };
+
+  const getToken = () => user?.token || null;
 
   const updateUser = (data) => {
     setUser(prev => {
@@ -58,7 +71,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, getToken }}>
       {children}
     </AuthContext.Provider>
   );

@@ -11,8 +11,12 @@ import {
 } from "@tanstack/react-table";
 
 import { useAdminData } from "../../../context/AdminDataContext";
+import { useAuth } from "../../../context/AuthContext";
 import { InfinityLoader } from "../../../components/ui/loader-13";
 import { cardVariants, buttonVariants, staggerContainer } from "../../../utils/motion";
+
+const API = "http://localhost:8000";
+
 
 const StatCardShort = ({ icon: Icon, title, value, subtext, color, i }) => (
   <motion.div 
@@ -183,7 +187,8 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, studentName }) =>
 export default function StudentManagement({ noLayout = false, hideStats = false }){
   const { searchQuery, setSearchQuery } = useSearch();
   const [localSearch, setLocalSearch] = useState("");
-  const { students, setStudents } = useAdminData();
+  const { students, studentsLoading, setStudents, refreshStudents, courses, refreshDashboardStats } = useAdminData();
+  const { getToken } = useAuth();
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [sorting, setSorting] = useState([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -194,23 +199,6 @@ export default function StudentManagement({ noLayout = false, hideStats = false 
   const [courseFilter, setCourseFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [currentPage, setCurrentPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const isInitialMount = useRef(true);
-
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    // Trigger loading on any relevant filter change
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1700);
-
-    return () => clearTimeout(timer);
-  }, [instituteFilter, courseFilter, statusFilter]);
 
   const handleReset = () => {
     setInstituteFilter("");
@@ -221,9 +209,13 @@ export default function StudentManagement({ noLayout = false, hideStats = false 
     setSorting([]);
   };
 
+  // Reset page when filters change
   useEffect(() => {
-    localStorage.setItem('admin_students_list_v5', JSON.stringify(students));
-  }, [students]);
+    setCurrentPage(1);
+  }, [instituteFilter, courseFilter, statusFilter, localSearch]);
+
+
+
 
   const filteredStudents = useMemo(() => {
     
@@ -338,17 +330,57 @@ const matchesCourse = !courseFilter || s.course === courseFilter;
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const handleConfirmDelete = () => {
-    if (studentToDelete) {
-      setStudents(prev => prev.filter(s => s.studentId !== studentToDelete.studentId));
-      if (selectedStudent?.studentId === studentToDelete.studentId) setSelectedStudent(null);
+  const handleConfirmDelete = async () => {
+    if (!studentToDelete) return;
+    try {
+      const res = await fetch(`${API}/students/${studentToDelete.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (res.ok) {
+        await refreshStudents();
+        refreshDashboardStats();
+        if (selectedStudent?.studentId === studentToDelete.studentId) setSelectedStudent(null);
+      } else {
+        console.error('[Delete] Failed:', res.status);
+      }
+    } catch (err) {
+      console.error('[Delete] Error:', err);
+    } finally {
       setStudentToDelete(null);
     }
   };
 
-  const handleSaveStudent = (updatedData) => {
-    setStudents(prev => prev.map(s => s.studentId === updatedData.studentId ? updatedData : s));
-    if (selectedStudent?.studentId === updatedData.studentId) setSelectedStudent(updatedData);
+  const handleSaveStudent = async (updatedData) => {
+    if (!updatedData.id) return;
+    try {
+      const res = await fetch(`${API}/students/${updatedData.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          name: updatedData.name,
+          email: updatedData.email,
+          phone: updatedData.phone,
+          course: updatedData.course,
+          status: updatedData.status,
+          address: updatedData.address,
+        }),
+      });
+      if (res.ok) {
+        await refreshStudents();
+        refreshDashboardStats();
+        if (selectedStudent?.studentId === updatedData.studentId) {
+          setSelectedStudent(prev => ({ ...prev, ...updatedData }));
+        }
+      } else {
+        console.error('[Update] Failed:', res.status);
+      }
+    } catch (err) {
+      console.error('[Update] Error:', err);
+    }
   };
 
   const currentMonthShort = new Date().toLocaleString('en-US', { month: 'short' });
@@ -411,20 +443,11 @@ const matchesCourse = !courseFilter || s.course === courseFilter;
                     disabled={!instituteFilter}
                     className="w-full h-11 bg-[#F8FAFC] border border-slate-100 rounded-xl px-4 text-xs font-black appearance-none cursor-pointer focus:ring-2 focus:ring-primary/20 transition-all outline-none pr-10 disabled:cursor-not-allowed"
                   >
-                    <option value="" hidden>Select Course</option>
-                    {instituteFilter === "GIT" ? (
-                      <>
-                        <option>B-Tech (CS)</option>
-                        <option>B-Tech (CSE)</option>
-                        <option>B-Tech (AI)</option>
-                      </>
-                    ) : instituteFilter === "GICSA" ? (
-                      <>
-                        <option>BSC (IT)</option>
-                        <option>MSC (IT) INT</option>
-                        <option>BCA</option>
-                      </>
-                    ) : null}
+                     <option value="" hidden>Select Course</option>
+                     {(courses || [])
+                       .filter(c => !instituteFilter || c.institute === instituteFilter)
+                       .map(c => <option key={c.id || c.name} value={c.name}>{c.name}</option>)
+                     }
                   </select>
                   <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none group-hover:text-primary transition-colors" />
                </div>
@@ -466,7 +489,7 @@ const matchesCourse = !courseFilter || s.course === courseFilter;
             </div>
         </div>
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
-            {isLoading ? (
+            {studentsLoading ? (
                <div className="py-32 flex flex-col items-center justify-center bg-slate-50/5 animate-in fade-in duration-500">
                   <InfinityLoader size={80} className="[&>svg>path:last-child]:stroke-primary [&>svg>path:last-child]:drop-shadow-[0_0_12px_rgba(79,70,229,0.2)]" />
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-8 flex items-center gap-2">
@@ -480,7 +503,7 @@ const matchesCourse = !courseFilter || s.course === courseFilter;
                  <thead>
                    {table.getHeaderGroups().map(headerGroup => (
                      <tr key={headerGroup.id} className="bg-slate-50/50">
-                       {headerGroup.headers.map(header => (
+                       {(headerGroup.headers || []).map(header => (
                          <th key={header.id} className="py-4 md:py-5 px-6 md:px-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                          </th>

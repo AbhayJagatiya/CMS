@@ -11,23 +11,9 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearch } from "../../context/SearchContext";
 import { useAdminData } from "../../context/AdminDataContext";
+import { useAuth } from "../../context/AuthContext";
 
-const ENROLLMENT_CATEGORIES = [
-  { name: 'B-Tech (CS)', color: '#4F46E5' },
-  { name: 'B-Tech (CSE)', color: '#7C3AED' },
-  { name: 'B-Tech (AI)', color: '#3B82F6' },
-  { name: 'BSC (IT)', color: '#10B981' },
-  { name: 'MSC (IT) INT', color: '#F59E0B' },
-  { name: 'BCA', color: '#EF4444' },
-];
-
-
-const initialFaculties = [
-  { id: 'f1', name: "Sarah Gilbert", title: "STUDENT MANAGEMENT", status: "Active", courses: "24", email: "Student@gmail.com", color: "bg-primary", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" },
-  { id: 'f2', name: "Mark Zuckerberg", title: "ATTENDANCE MANAGEMENT", status: "Active", courses: "12", email: "Attendance@gmail.com", color: "bg-emerald-600", avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" },
-  { id: 'f3', name: "Elena Salvatore", title: "COURSE MANAGEMENT", status: "Active", courses: "8", email: "Course@gmail.com", color: "bg-rose-600", avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" },
-  { id: 'f4', name: "Bruce Wayne", title: "FEES MANAGEMENT", status: "Active", courses: "15", email: "Fees@gmail.com", color: "bg-amber-600", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" },
-];
+const initialFaculties = [];
 
 const StatCard = ({ icon: Icon, title, value, badge, color }) => (
   <div className="bg-white rounded-[32px] p-10 flex flex-col gap-6 shadow-[0_4px_40px_rgba(0,0,0,0.02)] border border-slate-200 relative group hover:shadow-2xl hover:shadow-black/5 active:scale-[0.98] transition-all cursor-pointer">
@@ -207,19 +193,15 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 export default function AdminHome() {
   const { searchQuery } = useSearch();
   const { 
-    students, 
-    fees, 
-    courses, 
-    attendanceLogs, 
-    feeTrends, 
+    getEnrollmentStats, 
+    dashboardStats, 
+    refreshDashboardStats,
+    feeTrends,
     attendanceTrends,
-    getEnrollmentStats 
+    faculties,
+    statsLoading
   } = useAdminData();
 
-  const [faculties, setFaculties] = useState(() => {
-    const saved = localStorage.getItem('admin_faculty_overview');
-    return saved ? JSON.parse(saved) : initialFaculties;
-  });
   const navigate = useNavigate();
   const [enrollmentYear, setEnrollmentYear] = useState(2026);
   const [enrollmentMonth, setEnrollmentMonth] = useState(3); // April
@@ -228,51 +210,31 @@ export default function AdminHome() {
     getEnrollmentStats(enrollmentYear, enrollmentMonth), 
   [enrollmentYear, enrollmentMonth, getEnrollmentStats]);
 
-  // Dynamic Dashboard Stats
+  // Use values from backend analytics
   const statsValues = useMemo(() => {
-    // 1. Total Students
-    const totalStudents = students.length;
-
-    // 2. Attendance %
-    const presentCount = attendanceLogs.filter(l => l.status === "Present").length;
-    const attendancePct = attendanceLogs.length > 0 
-      ? Math.round((presentCount / attendanceLogs.length) * 100) 
-      : 0;
-
-    // 3. Total Courses
-    const totalCourses = courses.length;
-    const activeCourses = courses.filter(c => c.status === "Active").length;
-
-    // 4. Fees Collected
-    const totalFees = fees.reduce((sum, f) => sum + f.paid, 0);
-    const formatFees = (val) => {
-        if (val >= 10000000) return `₹${(val / 10000000).toFixed(1)}Cr`;
-        if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
-        if (val >= 1000) return `₹${(val / 1000).toFixed(1)}K`;
-        return `₹${val}`;
+    if (statsLoading || !dashboardStats) return {
+      students: "0",
+      attendance: "0%",
+      courses: "0",
+      activeCourses: "0 Active",
+      fees: "₹0"
     };
+    return dashboardStats.stats;
+  }, [dashboardStats, statsLoading]);
 
-    return {
-        students: totalStudents.toLocaleString(),
-        attendance: `${attendancePct}%`,
-        courses: totalCourses.toString(),
-        activeCourses: `${activeCourses} Active`,
-        fees: formatFees(totalFees)
-    };
-  }, [students, attendanceLogs, courses, fees]);
+  const topPerformers = dashboardStats?.topPerformers || [];
+  const recentAttendance = dashboardStats?.recentAttendance || [];
+
+  const { API, getToken } = useAuth();
 
   useEffect(() => {
-    try {
-      localStorage.setItem('admin_faculty_overview', JSON.stringify(faculties));
-    } catch (e) {
-      console.warn('Storage quota exceeded. Changes might not persist across reloads.');
-    }
-  }, [faculties]);
+    refreshDashboardStats();
+  }, []);
 
   const filteredFaculty = useMemo(() => {
-    return faculties.filter(f => 
-       f.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-       f.title.toLowerCase().includes(searchQuery.toLowerCase())
+    return (faculties || []).filter(f => 
+       (f.name || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+       (f.title || "").toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [faculties, searchQuery]);
 
@@ -297,6 +259,49 @@ export default function AdminHome() {
         <StatCard title="Fees Collected" value={statsValues.fees} badge="Target Met" icon={CreditCard} color="bg-primary" />
       </div>
 
+      {/* Analytics Grid: Top Performers & Recent Entries */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-14">
+         {/* Top Performers */}
+         <div className="bg-white rounded-[32px] p-8 md:p-12 border border-slate-200 shadow-sm">
+            <h3 className="text-xl font-bold text-on-surface tracking-tight mb-8 uppercase">Top Performers (Attendance)</h3>
+            <div className="space-y-6">
+               {(topPerformers || []).map((p, i) => (
+                  <div key={i} className="flex items-center justify-between group">
+                     <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-primary font-black text-sm">{i+1}</div>
+                        <div>
+                           <p className="text-sm font-black text-[#0f172a] tracking-tight">{p.name}</p>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.course}</p>
+                        </div>
+                     </div>
+                     <span className="text-sm font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg">{p.percentage}%</span>
+                  </div>
+               ))}
+               {topPerformers.length === 0 && <p className="text-slate-400 text-xs font-bold uppercase tracking-widest text-center py-10">No data yet</p>}
+            </div>
+         </div>
+
+         {/* Recent Attendance */}
+         <div className="bg-[#1e293b] rounded-[32px] p-8 md:p-12 border border-slate-800 shadow-xl">
+            <h3 className="text-xl font-bold text-white tracking-tight mb-8 uppercase">Recent Attendance</h3>
+            <div className="space-y-6">
+               {(recentAttendance || []).map((item, i) => (
+                  <div key={i} className="flex items-center justify-between border-b border-white/5 pb-4 last:border-0 last:pb-0">
+                     <div className="flex items-center gap-4">
+                        <div className={`w-2 h-2 rounded-full ${item.status === 'PRESENT' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <div>
+                           <p className="text-sm font-black text-white tracking-tight">{item.name || "Unknown"}</p>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.course}</p>
+                        </div>
+                     </div>
+                     <p className="text-[10px] font-black text-slate-500 uppercase">{item.date}</p>
+                  </div>
+               ))}
+               {recentAttendance.length === 0 && <p className="text-slate-500 text-xs font-bold uppercase tracking-widest text-center py-10">No recent logs</p>}
+            </div>
+         </div>
+      </div>
+
       {/* Middle Grid: Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-10 mb-10 md:mb-14">
         {/* Fees Collection Trend */}
@@ -311,7 +316,7 @@ export default function AdminHome() {
            <div className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
               <div className="h-80 min-w-[1200px]">
                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                    <AreaChart data={feeTrends} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+                    <AreaChart data={feeTrends || []} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
                        <defs>
                          <linearGradient id="colorWave" x1="0" y1="0" x2="0" y2="1">
                            <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2}/>
@@ -347,7 +352,7 @@ export default function AdminHome() {
                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 8px 40px rgba(0,0,0,0.05)', padding: '12px' }}
                            itemStyle={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}
                            labelStyle={{ fontSize: '10px', fontWeight: 700, marginBottom: '4px', color: '#64748B' }}
-                           formatter={(value, name) => [`₹${value.toLocaleString()}`, name === 'actual' ? "Actual Collection" : "Projected Goal"]}
+                           formatter={(value, name) => [`₹${(value || 0).toLocaleString()}`, name === 'actual' ? "Actual Collection" : "Projected Goal"]}
                         />
                         <Legend 
                            verticalAlign="top" 
@@ -355,7 +360,7 @@ export default function AdminHome() {
                            iconType="circle"
                            content={({ payload }) => (
                               <div className="flex gap-4 mb-8">
-                                 {payload.map((entry, index) => (
+                                 {(payload || []).map((entry, index) => (
                                     <div key={`item-${index}`} className="flex items-center gap-2">
                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
@@ -395,7 +400,7 @@ export default function AdminHome() {
         {/* Student Enrollment Donut */}
         <div className="bg-[#EFF4FF] rounded-[32px] md:rounded-[40px] p-6 md:p-12 border border-blue-100 shadow-sm shadow-black/5 flex flex-col min-h-[400px] md:min-h-[500px]">
            <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-10 w-full">
-              <h3 className="text-xl font-bold text-[#0f172a] tracking-tight truncate">Student Enrollment</h3>
+              <h3 className="text-xl font-bold text-[#0f172a] tracking-tight truncate uppercase">Student Enrollment</h3>
               <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
                  <select 
                    value={enrollmentYear} 
@@ -410,7 +415,7 @@ export default function AdminHome() {
                    onChange={(e) => setEnrollmentMonth(Number(e.target.value))}
                    className="flex-1 sm:flex-none bg-white border border-blue-100/50 outline-none text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg cursor-pointer appearance-none min-w-[100px] hover:bg-white/80 transition-all duration-200 focus:ring-4 focus:ring-primary/10"
                  >
-                    {MONTHS.map((m, i) => (
+                    {(MONTHS || []).map((m, i) => (
                       <option key={m} value={i}>{m}</option>
                     ))}
                  </select>
@@ -423,17 +428,17 @@ export default function AdminHome() {
                     <Tooltip 
                         contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 8px 40px rgba(0,0,0,0.05)', padding: '12px' }}
                         itemStyle={{ color: '#0f172a', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase' }}
-                        formatter={(value, name) => [`${value}%`, name]}
+                        formatter={(value, name) => [`${value}`, name]}
                      />
                     <Pie
-                      data={currentEnrollmentData}
+                      data={currentEnrollmentData || []}
                       innerRadius={window.innerWidth < 768 ? 60 : 80}
                       outerRadius={window.innerWidth < 768 ? 80 : 100}
                       paddingAngle={3}
                       dataKey="value"
                       stroke="none"
                     >
-                      {currentEnrollmentData.map((entry, index) => (
+                      {(currentEnrollmentData || []).map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -441,7 +446,7 @@ export default function AdminHome() {
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                  <span className="text-2xl md:text-4xl font-black text-on-surface tracking-tighter leading-none">
-                    {currentEnrollmentData.reduce((acc, curr) => acc + curr.value, 0)}
+                    {(currentEnrollmentData || []).reduce((acc, curr) => acc + (curr.value || 0), 0)}
                  </span>
                  <span className="text-[9px] md:text-[10px] font-black text-secondary uppercase tracking-widest mt-1 md:mt-2">Students</span>
               </div>
@@ -449,7 +454,7 @@ export default function AdminHome() {
 
            <div className="grid grid-cols-2 gap-x-4 md:gap-x-8 gap-y-4 mt-8 md:mt-10 w-full">
               <div className="space-y-3">
-                 {currentEnrollmentData.slice(0, 3).map((item, i) => (
+                 {(currentEnrollmentData || []).slice(0, 3).map((item, i) => (
                     <div key={i} className="flex items-center gap-2 md:gap-3">
                        <div className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: item.color }} />
                        <span className="text-[9px] md:text-[10px] font-black text-secondary uppercase tracking-tight truncate">{item.name}</span>
@@ -457,7 +462,7 @@ export default function AdminHome() {
                  ))}
               </div>
               <div className="space-y-3">
-                 {currentEnrollmentData.slice(3, 6).map((item, i) => (
+                 {(currentEnrollmentData || []).slice(3, 8).map((item, i) => (
                     <div key={i} className="flex items-center gap-2 md:gap-3">
                        <div className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: item.color }} />
                        <span className="text-[9px] md:text-[10px] font-black text-secondary uppercase tracking-tight truncate">{item.name}</span>
@@ -479,7 +484,7 @@ export default function AdminHome() {
         <div className="overflow-x-auto pb-6 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
            <div className="h-64 min-w-[800px] md:min-w-[1500px]">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                 <BarChart data={attendanceTrends}>
+                 <BarChart data={attendanceTrends || []}>
                     <XAxis dataKey="name" fontSize={9} fontWeight={900} axisLine={false} tickLine={false} dy={15} />
                     <Tooltip 
                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 8px 40px rgba(0,0,0,0.05)', padding: '12px' }}
@@ -511,21 +516,37 @@ export default function AdminHome() {
             <h3 className="text-2xl md:text-3xl font-black text-[#0f172a] tracking-tight leading-none">Faculty Overview</h3>
          </div>
          
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
-            {filteredFaculty.map((faculty) => (
-               <FacultyCard 
-                 key={faculty.id} 
-                 {...faculty} 
-                 onClick={() => navigate('/admin/faculty', { 
-                    state: { 
-                        selectedFacultyId: faculty.id, 
-                        facultyName: faculty.name,
-                        facultyRole: faculty.title.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
-                    } 
-                 })}
-               />
-            ))}
-         </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
+            {(filteredFaculty || []).map((faculty) => {
+               // Map backend role to UI title
+               const roleMap = {
+                 "STUDENT_MANAGER": "Student Management",
+                 "ATTENDANCE_MANAGER": "Attendance Management",
+                 "COURSE_MANAGER": "Course Management",
+                 "FEES_MANAGER": "Fees Management",
+                 "ADMIN": "Administrator"
+               };
+               const displayRole = roleMap[faculty.role] || faculty.role;
+
+               return (
+                 <FacultyCard 
+                   key={faculty.id} 
+                   name={faculty.name}
+                   title={displayRole}
+                   status="Active"
+                   courses={faculty.courses_count || 3} // Fallback or real count
+                   avatar={faculty.avatar}
+                   onClick={() => navigate('/admin/faculty', { 
+                      state: { 
+                          selectedFacultyId: faculty.id, 
+                          facultyName: faculty.name,
+                          facultyRole: displayRole
+                      } 
+                   })}
+                 />
+               );
+            })}
+          </div>
       </div>
     </AdminLayout>
   );

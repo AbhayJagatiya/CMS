@@ -13,7 +13,7 @@ import { useAdminData } from "../../../context/AdminDataContext";
 import { InfinityLoader } from "../../../components/ui/loader-13";
 
 export default function FeesManagement({noLayout = false, hideStats = false }) {
-  const { fees, setFees } = useAdminData();
+  const { fees, feesLoading, setFees } = useAdminData();
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sorting, setSorting] = useState([]);
@@ -24,11 +24,9 @@ export default function FeesManagement({noLayout = false, hideStats = false }) {
     course: ""
   });
   const itemsPerPage = 8;
-  const [isLoading, setIsLoading] = useState(false);
-  const isInitialMount = useRef(true);
   const detailRef = useRef(null);
+
   const handleReset = () => {
-    setIsLoading(true);
     setFilters({
       search: "",
       institute: "",
@@ -37,10 +35,8 @@ export default function FeesManagement({noLayout = false, hideStats = false }) {
     });
     setCurrentPage(1);
     setSorting([]);
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1700);
   };
+
   useEffect(() => {
     if (selectedStudent && detailRef.current) {
       detailRef.current.scrollIntoView({
@@ -49,20 +45,11 @@ export default function FeesManagement({noLayout = false, hideStats = false }) {
       });
     }
   }, [selectedStudent]);
-  // Trigger loading on any relevant filter change
+
+  // Reset page when filters change
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1700);
-
-    return () => clearTimeout(timer);
-  }, [filters.search, filters.institute, filters.course, filters.status]);
+    setCurrentPage(1);
+  }, [filters]);
 
   const filteredStudents = useMemo(() => {
     return fees.filter(student => {
@@ -70,8 +57,8 @@ export default function FeesManagement({noLayout = false, hideStats = false }) {
       // 🔍 SEARCH
       const matchesSearch =
         !filters.search ||
-        student.id.toLowerCase().includes(filters.search.toLowerCase()) ||
-        student.name.toLowerCase().includes(filters.search.toLowerCase());
+        (student.id || "").toString().toLowerCase().includes(filters.search.toLowerCase()) ||
+        (student.name || "").toLowerCase().includes(filters.search.toLowerCase());
 
       // 🎯 FILTERS
       const matchesInstitute =
@@ -108,21 +95,29 @@ export default function FeesManagement({noLayout = false, hideStats = false }) {
       header: "COURSE",
       cell: ({ row }) => <span className="text-xs font-bold text-slate-400 opacity-60 whitespace-nowrap uppercase tracking-tight">{row.getValue("course")}</span>,
     },
-    {
-      accessorKey: "totalFees",
-      header: () => <div className="text-right">TOTAL FEES</div>,
-      cell: ({ row }) => <div className="text-sm font-bold text-[#0f172a] text-right">₹{row.getValue("totalFees").toLocaleString()}</div>,
-    },
-    {
-      accessorKey: "paid",
-      header: () => <div className="text-right">PAID AMOUNT</div>,
-      cell: ({ row }) => <div className="text-sm font-bold text-emerald-600 text-right">₹{row.getValue("paid").toLocaleString()}</div>,
-    },
-    {
-      accessorKey: "remaining",
-      header: () => <div className="text-right">REMAINING</div>,
-      cell: ({ row }) => <div className="text-sm font-bold text-rose-600 text-right">₹{row.getValue("remaining").toLocaleString()}</div>,
-    },
+      {
+        accessorKey: "totalFees",
+        header: () => <div className="text-right">TOTAL FEES</div>,
+        cell: ({ row }) => <div className="text-sm font-bold text-[#0f172a] text-right">₹{(row.getValue("totalFees") || 0).toLocaleString()}</div>,
+      },
+      {
+        accessorKey: "paid",
+        header: () => <div className="text-right">PAID AMOUNT</div>,
+        cell: ({ row }) => <div className="text-sm font-bold text-emerald-600 text-right">₹{(row.getValue("paid") || 0).toLocaleString()}</div>,
+      },
+      {
+        accessorKey: "remaining",
+        header: () => <div className="text-right">BALANCE</div>,
+        cell: ({ row }) => {
+          const remaining = row.original.remaining;
+          const credit = row.original.credit;
+          if (credit > 0) {
+            return <div className="text-right"><span className="text-xs font-bold text-emerald-600">ADVANCE: ₹{credit.toLocaleString()}</span></div>;
+          }
+          return <div className="text-right"><span className="text-xs font-bold text-slate-500">DUE: ₹{remaining.toLocaleString()}</span></div>;
+        },
+      },
+
     {
       accessorKey: "dueDate",
       header: "DUE DATE",
@@ -156,20 +151,7 @@ export default function FeesManagement({noLayout = false, hideStats = false }) {
     getSortedRowModel: getSortedRowModel(),
   });
 
-  // Sub-table Columns
-  const semesterColumns = useMemo(() => [
-    { accessorKey: "sem", header: "SEMESTER", cell: ({ row }) => <span className="text-[14px] font-bold text-[#0f172a]">{row.getValue("sem")}</span> },
-    { accessorKey: "fees", header: () => <div className="text-right">FEES</div>, cell: ({ row }) => <div className="text-[14px] font-bold text-slate-500 text-right">₹{row.getValue("fees").toLocaleString()}</div> },
-    { accessorKey: "paid", header: () => <div className="text-right">PAID</div>, cell: ({ row }) => <div className="text-[14px] font-bold text-emerald-600 text-right">₹{row.getValue("paid").toLocaleString()}</div> },
-    { accessorKey: "remaining", header: () => <div className="text-right">REMAINING</div>, cell: ({ row }) => <div className="text-[14px] font-bold text-rose-600 text-right">₹{row.getValue("remaining").toLocaleString()}</div> },
-    { accessorKey: "status", header: () => <div className="text-center">STATUS</div>, cell: ({ row }) => (
-      <div className="text-center">
-         <span className={`px-4 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-[0.3em] ${
-          row.getValue("status") === 'Paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
-        }`}>{row.getValue("status")}</span>
-      </div>
-    )},
-  ], []);
+
 
   const historyColumns = useMemo(() => [
     { accessorKey: "date", header: "TRANSACTION DATE", cell: ({ row }) => <span className="text-[14px] font-bold text-slate-500">{row.getValue("date")}</span> },
@@ -187,8 +169,9 @@ export default function FeesManagement({noLayout = false, hideStats = false }) {
   const currentRows = rows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const stats = useMemo(() => {
-    const totalCollection = fees.reduce((acc, curr) => acc + (curr.paid || 0), 0);
-    const pendingFees = fees.reduce((acc, curr) => acc + (curr.remaining || 0), 0);
+    const totalCollection = Math.max(0, fees.reduce((acc, curr) => acc + (curr.paid || 0), 0));
+    const pendingFees = Math.max(0, fees.reduce((acc, curr) => acc + (curr.remaining || 0), 0));
+
 
     return [
       {
@@ -208,7 +191,7 @@ export default function FeesManagement({noLayout = false, hideStats = false }) {
     ];
   }, [fees]);
 
-  const courseOptions = [...new Set(fees.map(s => s.course))];
+  const courseOptions = [...new Set((fees || []).map(s => s.course))];
 
 
 const content = (
@@ -221,7 +204,7 @@ const content = (
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
-          {stats.map((stat, i) => (
+          {(stats || []).map((stat, i) => (
             <div key={i} className="bg-white p-8 rounded-[24px] border border-[#f1f5f9] shadow-sm flex flex-col justify-between transition-all duration-200 hover:shadow-lg group">
               <div className={`w-12 h-12 rounded-2xl ${stat.color} flex items-center justify-center mb-8 shrink-0 transition-transform duration-200 group-hover:scale-110`}>
                 <stat.icon className="w-6 h-6" />
@@ -290,15 +273,42 @@ const content = (
 
         <div className="bg-white rounded-[24px] border border-[#e2e8f0] shadow-sm overflow-hidden flex flex-col">
            <div className="p-6 md:p-8 border-b border-[#f1f5f9] flex justify-between items-center bg-[#f8fafc]">
-              <h3 className="text-xl font-bold text-[#0f172a] tracking-tight truncate">Student Fees Records</h3>
-              <button className="bg-[#0284c7] hover:bg-[#0369a1] text-white font-medium rounded-xl px-4 py-2.5 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
+               <h3 className="text-xl font-bold text-[#0f172a] tracking-tight truncate">Student Fees Records</h3>
+               <button 
+                onClick={() => {
+                  const headers = ["Student ID", "Name", "Course", "Total Fees", "Paid", "Remaining", "Status"];
+                  const csvContent = [
+                    headers.join(","),
+                    ...filteredStudents.map(s => [
+                      s.id,
+                      s.name,
+                      s.course,
+                      s.totalFees,
+                      s.paid,
+                      s.remaining,
+                      s.status
+                    ].join(","))
+                  ].join("\n");
+                  
+                  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement("a");
+                  link.setAttribute("href", url);
+                  link.setAttribute("download", `fees_report_${new Date().toISOString().split('T')[0]}.csv`);
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="bg-[#0284c7] hover:bg-[#0369a1] text-white font-medium rounded-xl px-4 py-2.5 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
+               >
                  <FileText className="w-4 h-4" />
                  Export Data
-              </button>
+               </button>
+
            </div>
            
             <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
-               {isLoading ? (
+                {feesLoading ? (
                   <div className="py-24 flex flex-col items-center justify-center bg-slate-50/5 animate-in fade-in duration-500">
                      <InfinityLoader size={80} className="[&>svg>path:last-child]:stroke-[#0284c7] [&>svg>path:last-child]:drop-shadow-[0_0_12px_rgba(2,132,199,0.2)]" />
                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-8 flex items-center gap-2">
@@ -312,7 +322,7 @@ const content = (
                      <thead>
                         {table.getHeaderGroups().map(headerGroup => (
                           <tr key={headerGroup.id} className="bg-[#f8fafc]">
-                            {headerGroup.headers.map(header => (
+                            {(headerGroup.headers || []).map(header => (
                               <th key={header.id} className="py-4 md:py-5 px-6 md:px-8 text-[10px] font-bold text-[#94a3b8] uppercase tracking-widest">
                                 {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                               </th>
@@ -321,7 +331,7 @@ const content = (
                         ))}
                      </thead>
                      <tbody className="divide-y divide-[#f1f5f9]">
-                        {currentRows.map((row) => (
+                        {(currentRows || []).map((row) => (
                           <tr key={row.id} onClick={() => setSelectedStudent(row.original)} className={`group hover:bg-[#f8fafc] transition-all cursor-pointer ${selectedStudent?.id === row.original.id ? 'bg-[#0284c7]/5' : ''}`}>
                              {row.getVisibleCells().map(cell => (
                                <td key={cell.id} className="py-4 md:py-6 px-6 md:px-8">
@@ -359,31 +369,29 @@ const content = (
                 </button>
 
                 <div className="w-full">
-                   <h3 className="text-lg md:text-xl font-bold text-[#0f172a] tracking-tight mb-6 md:mb-8">Detailed Fees Breakdown</h3>
+                   <h3 className="text-lg md:text-xl font-bold text-[#0f172a] tracking-tight mb-6 md:mb-8">Detailed Fees Overview</h3>
                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 mb-10 md:mb-12">
                       <DetailItem label="Full Name" val={selectedStudent.name} />
                       <DetailItem label="Student ID" val={selectedStudent.id} />
                       <DetailItem label="Course" val={selectedStudent.course} />
-                      <DetailItem label="Total Due" val={`₹${selectedStudent.remaining.toLocaleString()}`} color="text-rose-500" />
+                      {selectedStudent.credit > 0 ? (
+                        <DetailItem label="Advance Paid" val={`₹${selectedStudent.credit.toLocaleString()}`} color="text-emerald-600" />
+                      ) : (
+                        <DetailItem label="Total Due" val={`₹${selectedStudent.remaining.toLocaleString()}`} color="text-rose-500" />
+                      )}
                    </div>
 
-                   <div className="flex items-center gap-3 mb-6">
-                      <PieChart className="w-5 h-5 text-[#0284c7]" />
-                      <h4 className="text-base md:text-lg font-bold text-[#0f172a] tracking-tight">Semester-wise Breakdown</h4>
-                   </div>
-                   <div className="bg-[#f8fafc] rounded-[28px] border border-[#f1f5f9] overflow-hidden">
-                      <SubTable data={selectedStudent.semesters} columns={semesterColumns} />
-                   </div>
-                </div>
 
-                <div className="flex flex-col gap-6">
-                   <div className="flex items-center gap-3">
-                      <History className="w-5 h-5 text-[#0284c7]" />
-                      <h4 className="text-lg md:text-xl font-bold text-[#0f172a] tracking-tight">Recent Payment History</h4>
-                   </div>
-                   <div className="bg-[#f8fafc] rounded-[24px] border border-[#f1f5f9] overflow-hidden">
-                      <SubTable data={selectedStudent.history} columns={historyColumns} />
-                   </div>
+                 </div>
+ 
+                 <div className="flex flex-col gap-6">
+                    <div className="flex items-center gap-3">
+                       <History className="w-5 h-5 text-[#0284c7]" />
+                       <h4 className="text-lg md:text-xl font-bold text-[#0f172a] tracking-tight">Recent Payment History</h4>
+                    </div>
+                    <div className="bg-[#f8fafc] rounded-[24px] border border-[#f1f5f9] overflow-hidden">
+                       <SubTable data={selectedStudent.history || []} columns={historyColumns} />
+                    </div>
                 </div>
              </motion.div>
           )}
@@ -403,7 +411,7 @@ function SubTable({ data, columns }) {
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id} className="bg-[#f8fafc]">
-              {headerGroup.headers.map(header => (
+              {(headerGroup.headers || []).map(header => (
                 <th key={header.id} className="py-5 px-8 text-[10px] font-bold text-[#94a3b8] uppercase tracking-widest">
                   {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </th>
@@ -439,7 +447,7 @@ function Dropdown({ label, value, options, onChange, disabled, placeholder }) {
             className="w-full bg-white border border-[#f1f5f9] rounded-xl px-4 py-2.5 text-[14px] font-medium text-[#0f172a] outline-none focus:ring-4 focus:ring-[#0284c7]/10 focus:border-[#0284c7] transition-all appearance-none cursor-pointer pr-10 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-50 disabled:border-none"
           >
              {placeholder && <option value="" hidden>{placeholder}</option>}
-             {options.map(o => <option key={o} value={o}>{o}</option>)}
+             {(options || []).map(o => <option key={o} value={o}>{o}</option>)}
           </select>
           <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
        </div>

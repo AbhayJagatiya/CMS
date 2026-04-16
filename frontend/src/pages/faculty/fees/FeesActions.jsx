@@ -1,15 +1,18 @@
 import React, { useState } from "react";
 import { useAdminData } from "../../../context/AdminDataContext";
+import { useAuth } from "../../../context/AuthContext";
 import { CreditCard, Calendar } from "lucide-react";
 
+const API = "http://localhost:8000";
+
 export default function FeesActions() {
-  const { fees, setFees, courses } = useAdminData();
+const { fees, setFees, courses, fetchFeeDetail, makePayment, setDueDate } = useAdminData();
+  const { getToken } = useAuth();
 
   const [studentId, setStudentId] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
 
   const [paymentData, setPaymentData] = useState({
-    semester: "",
     amount: "",
     method: "UPI"
   });
@@ -17,7 +20,6 @@ export default function FeesActions() {
   const [dueDateData, setDueDateData] = useState({
     institute: "",
     course: "",
-    semester: "",
     dueDate: ""
   });
 
@@ -29,112 +31,68 @@ export default function FeesActions() {
   };
 
   // ================= FETCH =================
-  const handleFetchStudent = () => {
-    const student = fees.find(s => s.id === studentId.trim());
-    if (!student) return showMessage("not-found");
-    setSelectedStudent(student);
-    showMessage("fetched");
+  const handleFetchStudent = async () => {
+    const sid = studentId.trim();
+    if (!sid) return showMessage("not-found");
+    
+    try {
+      const data = await fetchFeeDetail(sid);
+      if (!data) return showMessage("not-found");
+      
+      setSelectedStudent(data);
+      showMessage("fetched");
+    } catch {
+      showMessage("not-found");
+    }
   };
 
+
   // ================= PAYMENT =================
-  const handlePayment = (e) => {
+  const handlePayment = async (e) => {
     e.preventDefault();
+    if (!selectedStudent || !paymentData.amount) return showMessage("error");
 
-    if (!selectedStudent || !paymentData.semester || !paymentData.amount) {
-      return showMessage("error");
+    try {
+      const result = await makePayment({
+        student_id: selectedStudent.id,
+        amount: parseInt(paymentData.amount),
+        method: paymentData.method,
+      });
+
+      if (!result.success) {
+        if (result.message && result.message.includes("exceeds")) {
+          return showMessage("overpay");
+        }
+        return showMessage("error");
+      }
+
+      showMessage("paid");
+      setPaymentData({ amount: "", method: "UPI" });
+      // Refresh selected student view
+      await handleFetchStudent();
+    } catch {
+      showMessage("error");
     }
-
-    const sem = selectedStudent.semesters.find(
-      s => s.sem === paymentData.semester
-    );
-
-    if (!sem) return showMessage("error");
-
-    if (Number(paymentData.amount) > sem.remaining) {
-      return showMessage("overpay");
-    }
-
-    setFees(prev =>
-      prev.map(s => {
-        if (s.id !== selectedStudent.id) return s;
-
-        const updatedSemesters = s.semesters.map(sem => {
-          if (sem.sem !== paymentData.semester) return sem;
-
-          const newPaid = sem.paid + Number(paymentData.amount);
-          const newRemaining = sem.fees - newPaid;
-
-          return {
-            ...sem,
-            paid: newPaid,
-            remaining: newRemaining,
-            status: newRemaining <= 0 ? "Paid" : "Pending"
-          };
-        });
-
-        return {
-          ...s,
-          semesters: updatedSemesters,
-          paid: updatedSemesters.reduce((a, b) => a + b.paid, 0),
-          remaining: updatedSemesters.reduce((a, b) => a + b.remaining, 0),
-          status: updatedSemesters.every(s => s.remaining === 0)
-            ? "Paid"
-            : "Pending",
-          history: [
-            {
-              date: new Date().toLocaleDateString(),
-              amount: Number(paymentData.amount),
-              method: paymentData.method,
-              status: "Success"
-            },
-            ...s.history
-          ]
-        };
-      })
-    );
-
-    showMessage("paid");
-
-    setPaymentData({
-      semester: "",
-      amount: "",
-      method: "UPI"
-    });
   };
 
   // ================= DUE DATE =================
-  const handleSetDueDate = (e) => {
+  const handleSetDueDate = async (e) => {
     e.preventDefault();
+    if (!dueDateData.course || !dueDateData.dueDate) return showMessage("error");
 
-    if (!dueDateData.institute || !dueDateData.course || !dueDateData.dueDate) {
-      return showMessage("error");
+    try {
+      const result = await setDueDate({
+        course: dueDateData.course,
+        due_date: dueDateData.dueDate,
+      });
+
+      if (!result.success) return showMessage("error");
+      showMessage("due-set");
+    } catch {
+      showMessage("error");
     }
-
-    setFees(prev =>
-      prev.map(s => {
-        if (
-          s.institute === dueDateData.institute &&
-          s.course === dueDateData.course
-        ) {
-          const updatedSemesters = s.semesters.map(sem => {
-            if (!dueDateData.semester || sem.sem === dueDateData.semester) {
-              return { ...sem, dueDate: dueDateData.dueDate };
-            }
-            return sem;
-          });
-
-          return {
-            ...s,
-            dueDate: dueDateData.dueDate,
-            semesters: updatedSemesters
-          };
-        }
-        return s;
-      })
-    );
-
-    showMessage("due-set");
   };
+
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-4xl mx-auto">
@@ -184,41 +142,20 @@ export default function FeesActions() {
               <Detail label="Name" val={selectedStudent.name} />
               <Detail label="Course" val={selectedStudent.course} />
               <Detail label="Paid" val={`₹${selectedStudent.paid}`} />
-              <Detail label="Remaining" val={`₹${selectedStudent.remaining}`} />
+              {selectedStudent.credit > 0 ? (
+                <Detail label="Advance Paid" val={`₹${selectedStudent.credit}`} color="text-emerald-600" />
+              ) : (
+                <Detail label="Total Due" val={`₹${Math.max(0, selectedStudent.remaining)}`} />
+              )}
+
+
             </div>
-
-            <p className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-widest">
-              Pending Semesters
-            </p>
-
-            <ul className="text-sm font-bold text-slate-600">
-              {selectedStudent.semesters
-                .filter(s => s.remaining > 0)
-                .map(s => (
-                  <li key={s.sem}>
-                    {s.sem} → ₹{s.remaining} (Due: {s.dueDate || "N/A"})
-                  </li>
-                ))}
-            </ul>
           </div>
         )}
 
         {/* FORM */}
         {selectedStudent && (
           <form onSubmit={handlePayment} className="grid md:grid-cols-2 gap-6">
-
-            <select
-              value={paymentData.semester}
-              onChange={(e) => setPaymentData({ ...paymentData, semester: e.target.value })}
-              className="w-full h-12 bg-[#F8FAFC] rounded-2xl px-5 text-sm font-bold"
-            >
-              <option value="">Select Semester</option>
-              {selectedStudent.semesters
-                .filter(s => s.remaining > 0)
-                .map(s => (
-                  <option key={s.sem}>{s.sem}</option>
-                ))}
-            </select>
 
             <input
               type="number"
@@ -261,8 +198,7 @@ export default function FeesActions() {
         <form onSubmit={handleSetDueDate} className="grid md:grid-cols-2 gap-6">
 
           <Select label="Institute" value={dueDateData.institute} onChange={(v) => setDueDateData({ ...dueDateData, institute: v })} options={["GIT", "GICSA"]} />
-          <Select label="Course" value={dueDateData.course} onChange={(v) => setDueDateData({ ...dueDateData, course: v })} options={courses.map(c => c.name)} />
-          <Select label="Semester" value={dueDateData.semester} onChange={(v) => setDueDateData({ ...dueDateData, semester: v })} options={["All", "Sem 1", "Sem 2", "Sem 3", "Sem 4"]} />
+          <Select label="Course" value={dueDateData.course} onChange={(v) => setDueDateData({ ...dueDateData, course: v })} options={(courses || []).map(c => c.name)} />
 
           <Input label="Due Date" type="date" value={dueDateData.dueDate} onChange={(v) => setDueDateData({ ...dueDateData, dueDate: v })} />
 
@@ -288,12 +224,13 @@ export default function FeesActions() {
 }
 
 /* REUSABLE */
-const Detail = ({ label, val }) => (
+const Detail = ({ label, val, color }) => (
   <div>
     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-    <p className="text-sm font-black">{val}</p>
+    <p className={`text-sm font-black ${color || 'text-[#1E293B]'}`}>{val}</p>
   </div>
 );
+
 
 const Input = ({ label, value, onChange, type = "text" }) => (
   <div className="space-y-2">
@@ -307,7 +244,7 @@ const Select = ({ label, value, onChange, options = [] }) => (
     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
     <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full h-12 bg-[#F8FAFC] rounded-2xl px-5 text-sm font-bold">
       <option value="">Select</option>
-      {options.map(o => <option key={o}>{o}</option>)}
+      {(options || []).map(o => <option key={o}>{o}</option>)}
     </select>
   </div>
 );

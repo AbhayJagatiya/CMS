@@ -12,47 +12,36 @@ import { useAdminData } from "../../../context/AdminDataContext";
 import { InfinityLoader } from "../../../components/ui/loader-13";
 
 export default function CourseManagement({noLayout = false, hideStats = false }) {
-  const { students, courses, setCourses } = useAdminData();
+  const { students, courses, coursesLoading, setCourses, attendanceLogs } = useAdminData();
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sorting, setSorting] = useState([]);
   const [filters, setFilters] = useState({ search: "", status: "All Status", faculty: "All Faculty", feeRange: "All Fees", institute: "All Institute" });
   const itemsPerPage = 6;
-  const [isLoading, setIsLoading] = useState(false);
-  const isInitialMount = useRef(true);
 
   // Filter Logic
   const filteredCourses = useMemo(() => {
-    return courses.filter(c => {
-      const matchesSearch = c.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-        c.id.toLowerCase().includes(filters.search.toLowerCase());
+    if (coursesLoading) return [];
+    return (courses || []).filter(c => {
+      const matchesSearch = (c.name || "").toLowerCase().includes(filters.search.toLowerCase()) ||
+        (c.id || "").toString().toLowerCase().includes(filters.search.toLowerCase());
       const matchesStatus = filters.status === "All Status" || c.status === filters.status;
       const matchesFaculty = filters.faculty === "All Faculty" || c.faculty === filters.faculty;
       const matchesInstitute = filters.institute === "All Institute" || c.institute === filters.institute;
 
       let matchesFee = true;
-      if (filters.feeRange === "Under INR 3L") matchesFee = (c.fee || 0) < 3;
-      else if (filters.feeRange === "INR 3L - INR 5L") matchesFee = (c.fee || 0) >= 3 && (c.fee || 0) <= 5;
-      else if (filters.feeRange === "Over INR 5L") matchesFee = (c.fee || 0) > 5;
+      if (filters.feeRange === "Under INR 3L") matchesFee = (c.fee || 0) < 300000;
+      else if (filters.feeRange === "INR 3L - INR 5L") matchesFee = (c.fee || 0) >= 300000 && (c.fee || 0) <= 500000;
+      else if (filters.feeRange === "Over INR 5L") matchesFee = (c.fee || 0) > 500000;
 
       return matchesSearch && matchesStatus && matchesFaculty && matchesFee && matchesInstitute;
     });
-  }, [courses, filters]);
+  }, [courses, filters, coursesLoading]);
 
-  // Trigger loading on any relevant filter change
+  // Reset page relative to filters
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1700);
-
-    return () => clearTimeout(timer);
-  }, [filters.search, filters.status, filters.faculty, filters.feeRange, filters.institute]);
+    setCurrentPage(1);
+  }, [filters]);
 
   const courseColumns = useMemo(() => [
     {
@@ -86,8 +75,9 @@ export default function CourseManagement({noLayout = false, hideStats = false })
       accessorKey: "fee",
       header: "COURSE FEE",
       cell: ({ row }) => {
-        const fee = row.getValue("fee") || 0;
-        return <span className="text-xs font-bold text-primary whitespace-nowrap">INR {fee.toFixed(2)} Lakh</span>;
+        const fee = Number(row.getValue("fee") || 0);
+        const displayFee = fee >= 1000 ? `₹${(fee / 100000).toFixed(2)} L` : `₹${fee}`;
+        return <span className="text-xs font-bold text-primary whitespace-nowrap">{displayFee}</span>;
       },
     },
     {
@@ -101,9 +91,9 @@ export default function CourseManagement({noLayout = false, hideStats = false })
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400 group-hover:bg-primary group-hover:text-white transition-all">
-            {row.getValue("faculty")[0]}
+            {row.getValue("faculty")?.[0] || '?'}
           </div>
-          <span className="text-xs font-bold text-slate-600">{row.getValue("faculty")}</span>
+          <span className="text-xs font-bold text-slate-600">{row.getValue("faculty") || 'N/A'}</span>
         </div>
       ),
     },
@@ -164,11 +154,27 @@ export default function CourseManagement({noLayout = false, hideStats = false })
 
   const enrolledStudents = useMemo(() => {
     if (!selectedCourse) return [];
-    return students.filter(s => s.course === selectedCourse.name).map(s => ({
-      ...s,
-      attendance: 75 + Math.floor(Math.random() * 20) // Mock attendance for detail view
-    }));
-  }, [selectedCourse, students]);
+    
+    return students
+      .filter(s => s.course === selectedCourse.name)
+      .map(s => {
+        // Calculate real attendance for this student
+        const studentLogs = (attendanceLogs || []).filter(l => 
+          (l.student_id || l.studentId) === s.studentId
+        );
+        
+        let attendancePct = 0;
+        if (studentLogs.length > 0) {
+          const present = studentLogs.filter(l => l.status === "PRESENT").length;
+          attendancePct = Math.round((present / studentLogs.length) * 100);
+        }
+
+        return {
+          ...s,
+          attendance: attendancePct
+        };
+      });
+  }, [selectedCourse, students, attendanceLogs]);
 
   const enrolledTable = useReactTable({
     data: enrolledStudents,
@@ -182,16 +188,16 @@ export default function CourseManagement({noLayout = false, hideStats = false })
   const currentCoursesRows = tableRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const stats = useMemo(() => {
-    const totalEnrolled = courses.reduce((acc, curr) => acc + (curr.students || 0), 0);
+    const totalEnrolled = (courses || []).reduce((acc, curr) => acc + (curr.students || 0), 0);
     return [
-      { label: "Total Courses", val: courses.length, icon: BookOpen, color: "bg-indigo-50 text-primary" },
-      { label: "Active Courses", val: courses.filter(c => c.status === "Active").length, icon: CheckCircle, color: "bg-emerald-50 text-emerald-600" },
-      { label: "Inactive Courses", val: courses.filter(c => c.status === "Inactive").length, icon: AlertCircle, color: "bg-rose-50 text-rose-600" },
+      { label: "Total Courses", val: (courses || []).length, icon: BookOpen, color: "bg-indigo-50 text-primary" },
+      { label: "Active Courses", val: (courses || []).filter(c => c.status === "Active").length, icon: CheckCircle, color: "bg-emerald-50 text-emerald-600" },
+      { label: "Inactive Courses", val: (courses || []).filter(c => c.status === "Inactive").length, icon: AlertCircle, color: "bg-rose-50 text-rose-600" },
       { label: "Total Enrolled", val: totalEnrolled.toLocaleString(), icon: Users, color: "bg-amber-50 text-amber-600" },
     ];
   }, [courses]);
 
-  const facultyOptions = ["All Faculty", ...new Set(courses.map(c => c.faculty))];
+  const facultyOptions = ["All Faculty", ...new Set((courses || []).map(c => c.faculty))];
 
 const content = (
   <>
@@ -207,7 +213,7 @@ const content = (
 
         {/* Stats Section */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {stats.map((stat, i) => (
+          {(stats || []).map((stat, i) => (
             <div key={i} className="bg-white p-6 rounded-[24px] md:rounded-[28px] border border-slate-200 shadow-sm transition-all duration-200 hover:shadow-lg hover:shadow-black/5 group cursor-pointer active:scale-[0.98]">
               <div className={`w-10 h-10 md:w-12 md:h-12 rounded-2xl ${stat.color} flex items-center justify-center mb-4 md:mb-5 shrink-0 transition-transform duration-200 group-hover:scale-110`}>
                 <stat.icon className="w-5 h-5 md:w-6 md:h-6" />
@@ -248,7 +254,7 @@ const content = (
              <h3 className="text-xl font-bold text-[#0f172a] tracking-tight truncate uppercase">System Courses List</h3>
           </div>
           <div className="overflow-x-auto md:overflow-visible lg:overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
-             {isLoading ? (
+             {coursesLoading ? (
                 <div className="py-24 flex flex-col items-center justify-center bg-slate-50/5 animate-in fade-in duration-500">
                    <InfinityLoader size={80} className="[&>svg>path:last-child]:stroke-primary [&>svg>path:last-child]:drop-shadow-[0_0_12px_rgba(79,70,229,0.2)]" />
                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-8 flex items-center gap-2">
@@ -262,7 +268,7 @@ const content = (
                   <thead>
                     {table.getHeaderGroups().map(headerGroup => (
                       <tr key={headerGroup.id} className="bg-[#f8fafc]">
-                        {headerGroup.headers.map(header => (
+                        {(headerGroup.headers || []).map(header => (
                           <th key={header.id} className="py-4 md:py-5 px-6 md:px-8 text-[10px] font-bold text-[#94a3b8] uppercase tracking-widest">
                             {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                           </th>
@@ -271,7 +277,7 @@ const content = (
                     ))}
                   </thead>
                   <tbody className="divide-y divide-[#f1f5f9]">
-                    {currentCoursesRows.map((row) => (
+                    {(currentCoursesRows || []).map((row) => (
                       <tr 
                         key={row.id} 
                         onClick={() => setSelectedCourse(row.original)}
@@ -335,7 +341,7 @@ const content = (
                     
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 md:gap-8">
                        <DetailItem label="Course ID" val={selectedCourse.id} />
-                       <DetailItem label="Course Fee" val={`INR ${(selectedCourse.fee || 0).toFixed(2)} Lakh`} />
+                       <DetailItem label="Course Fee" val={`INR ${Number(selectedCourse.fee || 0).toFixed(2)} Lakh`} />
                        <DetailItem label="Duration" val={selectedCourse.duration} />
                        <DetailItem label="Faculty" val={selectedCourse.faculty} />
                        <DetailItem label="Status" val={selectedCourse.status} />
@@ -357,7 +363,7 @@ const content = (
                            <thead>
                               {enrolledTable.getHeaderGroups().map(headerGroup => (
                                 <tr key={headerGroup.id} className="bg-[#f8fafc]">
-                                  {headerGroup.headers.map(header => (
+                                  {(headerGroup.headers || []).map(header => (
                                     <th key={header.id} className="py-3 px-6 md:px-8 text-[10px] font-bold text-[#94a3b8] uppercase tracking-widest">
                                       {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                                     </th>
@@ -404,7 +410,7 @@ function Dropdown({ label, value, options, onChange }) {
             onChange={(e) => onChange(e.target.value)}
             className="w-full bg-white border border-[#f1f5f9] rounded-xl px-4 py-2.5 text-[14px] font-medium appearance-none outline-none focus:ring-4 focus:ring-[#0284c7]/10 focus:border-[#0284c7] transition-all cursor-pointer pr-10 text-[#0f172a]"
           >
-             {options.map(opt => <option key={opt}>{opt}</option>)}
+             {(options || []).map(opt => <option key={opt}>{opt}</option>)}
           </select>
           <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
        </div>

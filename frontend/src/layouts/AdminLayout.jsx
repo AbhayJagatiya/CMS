@@ -1,30 +1,31 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
+import { useAdminData } from "../context/AdminDataContext";
+import { InfinityLoader } from "../components/ui/loader-13";
 import Sidebar from "../components/common/Sidebar";
 import Header from "../components/common/Header";
-import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { fadeInUp, fadeIn } from "../utils/motion";
 
 export default function AdminLayout({ children }) {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { getFacultyNameByRole, facultiesLoading } = useAdminData();
 
   const getHeaderInfo = () => {
     const path = location.pathname;
-    const savedFaculties = localStorage.getItem('admin_faculty_overview');
-    const faculties = savedFaculties ? JSON.parse(savedFaculties) : [];
     
-    const getFacultyName = (title) => {
-      const f = faculties.find(fac => fac.title === title);
-      return f ? f.name : "FACULTY";
+    // Helper to format managed by string
+    const managedBy = (role) => {
+      if (facultiesLoading) return "LOADING...";
+      return `MANAGED BY ${getFacultyNameByRole(role)}`;
     };
 
     if (path === '/admin') return { title: "Dashboard", sub: "CENTRAL MANAGEMENT" };
-    if (path === '/admin/students') return { title: "Student Management", sub: `MANAGED BY ${getFacultyName("STUDENT MANAGEMENT")}` };
-    if (path === '/admin/attendance') return { title: "Attendance Management", sub: `MANAGED BY ${getFacultyName("ATTENDANCE MANAGEMENT")}` };
-    if (path === '/admin/courses') return { title: "Course Management", sub: `MANAGED BY ${getFacultyName("COURSE MANAGEMENT")}` };
-    if (path === '/admin/fees') return { title: "Fees Management", sub: `MANAGED BY ${getFacultyName("FEES MANAGEMENT")}` };
+    if (path === '/admin/students') return { title: "Student Management", sub: managedBy("STUDENT_MANAGER") };
+    if (path === '/admin/attendance') return { title: "Attendance Management", sub: managedBy("ATTENDANCE_MANAGER") };
+    if (path === '/admin/courses') return { title: "Course Management", sub: managedBy("COURSE_MANAGER") };
+    if (path === '/admin/fees') return { title: "Fees Management", sub: managedBy("FEES_MANAGER") };
     if (path === '/admin/faculty') return { title: "Faculty Management", sub: "SYSTEM AUTHORITY & USER PERMISSIONS" };
     if (path === '/admin/financials') return { title: "Financials", sub: "SYSTEM OVERVIEW" };
     return { title: "Admin Portal", sub: "Welcome back to Academic Authority." };

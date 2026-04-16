@@ -1,24 +1,22 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { useAdminData } from "../../context/AdminDataContext";
 import { useLocation } from "react-router-dom";
 import AdminLayout from "../../layouts/AdminLayout";
 import { UserPlus, ShieldAlert, Mail, Phone, Lock, User, Briefcase, Image as ImageIcon, CheckCircle2, AlertCircle, ChevronDown, UserSquare2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useAuth } from "../../context/AuthContext";
 
 const FACULTY_ROLES = [
-  "Student Management",
-  "Attendance Management",
-  "Course Management",
-  "Fees Management"
-];
-
-const INITIAL_FACULTIES = [
-  { id: 'f1', name: "Sarah Gilbert", email: "student@college.com", role: "Student Management" },
-  { id: 'f2', name: "Mark Zuckerberg", email: "attendance@college.com", role: "Attendance Management" },
-  { id: 'f3', name: "Elena Salvatore", email: "course@college.com", role: "Course Management" },
-  { id: 'f4', name: "Bruce Wayne", email: "fees@college.com", role: "Fees Management" },
+  { label: "Student Management",    backend: "STUDENT_MANAGER" },
+  { label: "Attendance Management", backend: "ATTENDANCE_MANAGER" },
+  { label: "Course Management",     backend: "COURSE_MANAGER" },
+  { label: "Fees Management",       backend: "FEES_MANAGER" },
 ];
 
 export default function FacultyManagement() {
+  const { getToken, API } = useAuth();
+  const { faculties, refreshFaculties } = useAdminData();
+
   // Registration State
   const [registerForm, setRegisterForm] = useState({
     name: "",
@@ -42,6 +40,11 @@ export default function FacultyManagement() {
 
   const location = useLocation();
   const [notification, setNotification] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    refreshFaculties();
+  }, []);
 
   useEffect(() => {
      if (location.state?.selectedFacultyId) {
@@ -72,7 +75,7 @@ export default function FacultyManagement() {
   const handleResetChange = (e) => {
     const { name, value } = e.target;
     if (name === 'facultyId') {
-      const selected = INITIAL_FACULTIES.find(f => f.id === value);
+      const selected = faculties.find(f => String(f.id) === value);
       setResetForm(prev => ({ 
         ...prev, 
         [name]: value,
@@ -89,9 +92,9 @@ export default function FacultyManagement() {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleCreateFaculty = (e) => {
+  const handleCreateFaculty = async (e) => {
     e.preventDefault();
-    if (Object.values(registerForm).some((val, i) => i !== 4 && val === "")) {
+    if (!registerForm.name || !registerForm.email || !registerForm.phone || !registerForm.employeeId || !registerForm.password) {
       showNotification("Please fill all required fields", "error");
       return;
     }
@@ -99,13 +102,44 @@ export default function FacultyManagement() {
       showNotification("Passwords do not match", "error");
       return;
     }
-    showNotification("Faculty account created successfully!");
-    setRegisterForm({
-      name: "", email: "", phone: "", role: "Student Management", employeeId: "", password: "", confirmPassword: ""
-    });
+
+    const backendRole = FACULTY_ROLES.find(r => r.label === registerForm.role)?.backend || "STUDENT_MANAGER";
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API}/faculty/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          name: registerForm.name,
+          email: registerForm.email.toLowerCase(),
+          phone: registerForm.phone,
+          employee_id: registerForm.employeeId,
+          role: backendRole,
+          password: registerForm.password,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        showNotification(err.detail || "Failed to create faculty", "error");
+        return;
+      }
+
+      await refreshFaculties();
+      showNotification("Faculty account created successfully!");
+      setRegisterForm({ name: "", email: "", phone: "", role: "Student Management", employeeId: "", password: "", confirmPassword: "", avatar: "" });
+    } catch (err) {
+      showNotification("Server error. Is backend running?", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleUpdatePassword = (e) => {
+  const handleUpdatePassword = async (e) => {
     e.preventDefault();
     if (!resetForm.facultyId || !resetForm.newPassword || !resetForm.confirmPassword) {
       showNotification("Please fill all fields", "error");
@@ -115,8 +149,34 @@ export default function FacultyManagement() {
       showNotification("Passwords do not match", "error");
       return;
     }
-    showNotification("Password updated successfully!");
-    setResetForm({ facultyId: "", fullName: "", newPassword: "", confirmPassword: "" });
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API}/faculty/reset-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          faculty_id: parseInt(resetForm.facultyId),
+          new_password: resetForm.newPassword,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        showNotification(err.detail || "Failed to reset password", "error");
+        return;
+      }
+
+      showNotification("Password updated successfully!");
+      setResetForm({ facultyId: "", fullName: "", role: "Student Management", newPassword: "", confirmPassword: "" });
+    } catch (err) {
+      showNotification("Server error. Is backend running?", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -211,7 +271,7 @@ export default function FacultyManagement() {
                            onChange={handleRegisterChange}
                            className="w-full bg-white border border-[#f1f5f9] rounded-xl px-4 py-2.5 pl-10 pr-10 text-[14px] font-medium focus:ring-4 focus:ring-[#0284c7]/10 focus:border-[#0284c7] transition-all outline-none appearance-none cursor-pointer text-[#0f172a]"
                          >
-                           {FACULTY_ROLES.map(role => <option key={role}>{role}</option>)}
+                           {FACULTY_ROLES.map(r => <option key={r.backend}>{r.label}</option>)}
                          </select>
                          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>
@@ -291,7 +351,7 @@ export default function FacultyManagement() {
                 </div>
 
                 <div className="pt-2">
-                   <button type="submit" className="w-full bg-[#0284c7] hover:bg-[#0369a1] text-white font-medium rounded-xl px-4 py-2.5 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+                    <button type="submit" disabled={isSubmitting} className={`w-full bg-[#0284c7] hover:bg-[#0369a1] text-white font-medium rounded-xl px-4 py-2.5 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 ${isSubmitting ? 'opacity-70' : ''}`}>
                       <UserPlus className="w-4 h-4" />
                       Create Account
                    </button>
@@ -323,8 +383,8 @@ export default function FacultyManagement() {
                         className="w-full bg-white border border-[#f1f5f9] rounded-xl px-4 py-2.5 pl-10 pr-10 text-[14px] font-medium focus:ring-4 focus:ring-[#0284c7]/10 focus:border-[#0284c7] transition-all outline-none appearance-none cursor-pointer text-[#0f172a]"
                       >
                         <option value="" hidden>Select a Faculty Member</option>
-                        {INITIAL_FACULTIES.map(f => (
-                          <option key={f.id} value={f.id}>{f.name} - {f.role}</option>
+                        {faculties.map(f => (
+                          <option key={f.id} value={f.id}>{f.name} — {f.role}</option>
                         ))}
                       </select>
                       <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -358,7 +418,7 @@ export default function FacultyManagement() {
                          disabled
                          className="w-full bg-slate-50 border border-[#f1f5f9] rounded-xl px-4 py-2.5 pl-10 pr-10 text-[14px] font-medium transition-all outline-none appearance-none opacity-60 cursor-not-allowed text-[#0f172a]"
                        >
-                         {FACULTY_ROLES.map(role => <option key={role}>{role}</option>)}
+                         {FACULTY_ROLES.map(r => <option key={r.backend}>{r.label}</option>)}
                        </select>
                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
@@ -396,7 +456,7 @@ export default function FacultyManagement() {
                 </div>
 
                 <div className="pt-2">
-                   <button type="submit" className="w-full bg-[#0f172a] hover:bg-slate-800 text-white font-medium rounded-xl px-4 py-2.5 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shadow-lg">
+                    <button type="submit" disabled={isSubmitting} className={`w-full bg-[#0f172a] hover:bg-slate-800 text-white font-medium rounded-xl px-4 py-2.5 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shadow-lg ${isSubmitting ? 'opacity-70' : ''}`}>
                       <ShieldAlert className="w-4 h-4" />
                       Update Password
                    </button>

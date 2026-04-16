@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
 import { useAdminData } from '../../../context/AdminDataContext';
+import { useAuth } from '../../../context/AuthContext';
 import { BookPlus, RefreshCcw, CheckCircle, AlertCircle } from 'lucide-react';
 
+const API = "http://localhost:8000";
+
 export default function CourseActions() {
-   const { courses, setCourses } = useAdminData();
+   const { courses, refreshCourses } = useAdminData();
+   const { getToken } = useAuth();
+   const [loading, setLoading] = useState(false);
 
    // ➕ ADD STATE
    const [addData, setAddData] = useState({
@@ -29,93 +34,120 @@ export default function CourseActions() {
 
    const [message, setMessage] = useState('');
 
-   // ================= CHANGE HANDLERS =================
-   const handleAddChange = (e) => {
-      setAddData({ ...addData, [e.target.name]: e.target.value });
-   };
-
-   const handleUpdateChange = (e) => {
-      setUpdateData({ ...updateData, [e.target.name]: e.target.value });
+   const showMessage = (msg) => {
+      setMessage(msg);
+      setTimeout(() => setMessage(''), 3000);
    };
 
    // ================= ADD COURSE =================
-   const handleAddSubmit = (e) => {
+   const handleAddSubmit = async (e) => {
       e.preventDefault();
 
       if (!addData.id || !addData.name || !addData.duration || !addData.fee || !addData.faculty) {
-         setMessage('error');
+         showMessage('error');
          return;
       }
 
-      const newCourse = {
-         ...addData,
-         fee: parseFloat(addData.fee),
-         students: 0
+      const payload = {
+         course_id: addData.id.toUpperCase(),
+         course_name: addData.name,
+         duration: addData.duration,
+         total_fee: parseInt(addData.fee),
+         institute: addData.institute,
+         faculty: addData.faculty,
+         status: addData.status,
       };
 
-      setCourses(prev => [...prev, newCourse]);
-      setMessage('added');
+      setLoading(true);
+      try {
+         const res = await fetch(`${API}/courses/`, {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json',
+               Authorization: `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify(payload),
+         });
 
-      setAddData({
-         id: '',
-         name: '',
-         duration: '',
-         fee: '',
-         institute: 'GIT',
-         faculty: '',
-         status: 'Active'
-      });
+         if (!res.ok) {
+            const err = await res.json();
+            showMessage(err.detail || 'api-error');
+            return;
+         }
 
-      setTimeout(() => setMessage(''), 3000);
+         await refreshCourses();
+         showMessage('added');
+         setAddData({ id: '', name: '', duration: '', fee: '', institute: 'GIT', faculty: '', status: 'Active' });
+      } catch (err) {
+         showMessage('server-error');
+      } finally {
+         setLoading(false);
+      }
    };
 
    // ================= FETCH COURSE =================
    const handleFetchCourse = () => {
-      if (!updateData.id) {
-         setMessage('no-id');
-         return;
-      }
+      if (!updateData.id) { showMessage('no-id'); return; }
 
-      const course = courses.find(c => c.id === updateData.id);
+      // Search in local courses list (already loaded from DB)
+      const course = courses.find(
+         c => (c.course_id || c.id || '').toLowerCase() === updateData.id.toLowerCase()
+      );
 
-      if (!course) {
-         setMessage('not-found');
-         return;
-      }
+      if (!course) { showMessage('not-found'); return; }
 
       setUpdateData({
-         id: course.id,
-         name: course.name || '',
+         id: course.course_id || course.id || '',
+         name: course.course_name || course.name || '',
          duration: course.duration || '',
-         fee: course.fee || '',
+         fee: course.total_fee || course.fee || '',
          institute: course.institute || 'GIT',
          faculty: course.faculty || '',
          status: course.status || 'Active'
       });
 
-      setMessage('fetched');
-      setTimeout(() => setMessage(''), 3000);
+      showMessage('fetched');
    };
 
    // ================= UPDATE COURSE =================
-   const handleUpdateSubmit = (e) => {
+   const handleUpdateSubmit = async (e) => {
       e.preventDefault();
+      if (!updateData.id) { showMessage('no-id'); return; }
 
-      if (!updateData.id) {
-         setMessage('no-id');
-         return;
+      const payload = {
+         course_id: updateData.id.toUpperCase(),
+         course_name: updateData.name,
+         duration: updateData.duration,
+         total_fee: parseInt(updateData.fee),
+         institute: updateData.institute,
+         faculty: updateData.faculty,
+         status: updateData.status,
+      };
+
+      setLoading(true);
+      try {
+         const res = await fetch(`${API}/courses/${updateData.id.toUpperCase()}`, {
+            method: 'PUT',
+            headers: {
+               'Content-Type': 'application/json',
+               Authorization: `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify(payload),
+         });
+
+         if (!res.ok) {
+            const err = await res.json();
+            showMessage(err.detail || 'api-error');
+            return;
+         }
+
+         await refreshCourses();
+         showMessage('updated');
+      } catch (err) {
+         showMessage('server-error');
+      } finally {
+         setLoading(false);
       }
-
-      setCourses(prev =>
-         prev.map(c =>
-            c.id === updateData.id
-               ? { ...c, ...updateData, fee: parseFloat(updateData.fee) }
-               : c
-         )
-      );
-
-      setMessage('updated');
-      setTimeout(() => setMessage(''), 3000);
    };
 
    return (
@@ -148,7 +180,7 @@ export default function CourseActions() {
                   <Input label="Course ID *" name="id" value={addData.id} onChange={handleAddChange} placeholder="e.g. CRS-101" />
                   <Input label="Course Name *" name="name" value={addData.name} onChange={handleAddChange} placeholder="e.g. B.Tech Computer Science" />
                   <Input label="Duration *" name="duration" value={addData.duration} onChange={handleAddChange} placeholder="e.g. 4 Years" />
-                  <Input label="Course Fee *" name="fee" value={addData.fee} onChange={handleAddChange} placeholder="e.g. 4.5 (Lakhs)" />
+                  <Input label="Course Fee (₹) *" name="fee" value={addData.fee} onChange={handleAddChange} placeholder="e.g. 450000" />
                   <Input label="Faculty Name *" name="faculty" value={addData.faculty} onChange={handleAddChange} placeholder="e.g. Dr. Sharma" />
 
                   <Select label="Institute" name="institute" value={addData.institute} onChange={handleAddChange} options={["GIT", "GICSA"]} />
@@ -156,8 +188,8 @@ export default function CourseActions() {
 
                </div>
 
-               <button className="px-8 py-3.5 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg">
-                  Publish Program
+               <button disabled={loading} className={`px-8 py-3.5 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg ${loading ? 'opacity-60' : ''}`}>
+                  {loading ? 'Publishing...' : 'Publish Program'}
                </button>
             </form>
          </div>
@@ -196,7 +228,7 @@ export default function CourseActions() {
 
                   <Input label="Course Name" name="name" value={updateData.name} onChange={handleUpdateChange} placeholder="Edit course name" />
                   <Input label="Duration" name="duration" value={updateData.duration} onChange={handleUpdateChange} placeholder="Edit duration" />
-                  <Input label="Course Fee" name="fee" value={updateData.fee} onChange={handleUpdateChange} placeholder="Edit fee" />
+                  <Input label="Course Fee (₹)" name="fee" value={updateData.fee} onChange={handleUpdateChange} placeholder="Edit fee" />
                   <Input label="Faculty Name" name="faculty" value={updateData.faculty} onChange={handleUpdateChange} placeholder="Edit faculty name" />
 
                   <Select label="Institute" name="institute" value={updateData.institute} onChange={handleUpdateChange} options={["GIT", "GICSA"]} />
@@ -204,25 +236,32 @@ export default function CourseActions() {
 
                </div>
 
-               <button className="px-8 py-3.5 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg">
-                  Update Program
+               <button disabled={loading} className={`px-8 py-3.5 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg ${loading ? 'opacity-60' : ''}`}>
+                  {loading ? 'Updating...' : 'Update Program'}
                </button>
             </form>
          </div>
 
          {/* ================= MESSAGE ================= */}
          {message && (
-            <div className="fixed bottom-6 right-6 px-6 py-3 rounded-xl text-white font-bold shadow-lg bg-indigo-600">
+            <div className={`fixed bottom-6 right-6 px-6 py-3 rounded-xl text-white font-bold shadow-lg z-50 ${
+               ['added','updated','fetched'].includes(message) ? 'bg-indigo-600' : 'bg-rose-500'
+            }`}>
                {message === 'added' && "Course Added ✅"}
                {message === 'updated' && "Course Updated 🔄"}
                {message === 'fetched' && "Data Loaded ✅"}
                {message === 'not-found' && "Course Not Found ❌"}
                {message === 'no-id' && "Enter Course ID ❌"}
-               {message === 'error' && "Fill all fields ❌"}
+               {message === 'error' && "Fill all required fields ❌"}
+               {message === 'server-error' && "Server error — is backend running? ❌"}
+               {!['added','updated','fetched','not-found','no-id','error','server-error'].includes(message) && message}
             </div>
          )}
       </div>
    );
+
+   function handleAddChange(e) { setAddData({ ...addData, [e.target.name]: e.target.value }); }
+   function handleUpdateChange(e) { setUpdateData({ ...updateData, [e.target.name]: e.target.value }); }
 }
 
 /* REUSABLE INPUT */
@@ -238,7 +277,7 @@ const Select = ({ label, options, ...props }) => (
    <div className="space-y-2">
       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">{label}</label>
       <select {...props} className="w-full h-12 bg-[#F8FAFC] border-none rounded-2xl px-5 text-sm font-bold">
-         {options.map(o => <option key={o}>{o}</option>)}
+         {(options || []).map(o => <option key={o}>{o}</option>)}
       </select>
    </div>
 );

@@ -1,141 +1,300 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
-import { STUDENT_RECORDS_DATA, STUDENT_FEES_DATA, getEnrollmentDistribution, getMonthlyFeeTrends, INITIAL_COURSES, generateAttendanceLogs } from '../lib/constants';
+import { useAuth } from './AuthContext';
+import api from '../lib/api';
 
 const AdminDataContext = createContext();
 
 export const AdminDataProvider = ({ children }) => {
-  // Initialize from LocalStorage if available, otherwise use Constants
-  const [students, setStudents] = useState(() => {
-    const saved = localStorage.getItem('admin_master_students_v3');
-    return saved ? JSON.parse(saved) : STUDENT_RECORDS_DATA;
+  const { user, getToken } = useAuth();
+  const role = user?.backendRole || '';
+
+  // Faculties → loaded from backend API
+  const [faculties, setFaculties] = useState([]);
+  const [facultiesLoading, setFacultiesLoading] = useState(true);
+
+  const refreshFaculties = async () => {
+    try {
+      const res = await api.get('/faculty/');
+      setFaculties(res.data || []);
+    } catch (err) {
+      console.error('[AdminDataContext] Failed to fetch faculties:', err);
+    } finally {
+      setFacultiesLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+    if (role === 'ADMIN') refreshFaculties(); 
+  }, [role]);
+
+  // Helper: map backend student shape → frontend shape used by all components
+  const mapStudent = (s) => ({
+    id: s.id,                          
+    studentId: s.student_id || s.id,
+    name: s.name || 'Unknown',
+    email: s.email || '',
+    phone: s.phone || '',
+    institute: s.Institude || '',
+    course: s.course || '',
+    admissionDate: s.admission_date || '', 
+    status: s.status || 'Active',
+    address: s.address || '',
+    avatar: `https://i.pravatar.cc/150?u=${s.email || s.id}`,
   });
 
-  const [fees, setFees] = useState(() => {
-    const saved = localStorage.getItem('admin_master_fees_v3');
-    return saved ? JSON.parse(saved) : STUDENT_FEES_DATA;
-  });
+  // Students → loaded from backend API
+  const [students, setStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(true);
 
-  const [courses, setCourses] = useState(() => {
-    const saved = localStorage.getItem('admin_master_courses_v5');
-    return saved ? JSON.parse(saved) : INITIAL_COURSES;
-  });
+  const refreshStudents = async () => {
+    try {
+      const res = await api.get('/students/');
+      setStudents((res.data || []).map(mapStudent));
+    } catch (err) {
+      console.error('[AdminDataContext] Failed to fetch students:', err);
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
 
-  const [attendanceLogs, setAttendanceLogs] = useState(() => {
-    const saved = localStorage.getItem('admin_master_attendance_v3');
-    return saved ? JSON.parse(saved) : generateAttendanceLogs(students);
-  });
+  useEffect(() => { 
+    if (['ADMIN', 'STUDENT_MANAGER', 'ATTENDANCE_MANAGER'].includes(role)) refreshStudents(); 
+  }, [role]);
 
-  // Persist changes
-  useEffect(() => {
-    localStorage.setItem('admin_master_students_v3', JSON.stringify(students));
-  }, [students]);
+  // Fees -> DB
+  const [fees, setFees] = useState([]);
+  const [feesLoading, setFeesLoading] = useState(true);
+  const refreshFees = async () => {
+    try {
+      const res = await api.get('/fees/');
+      // Parse fee amounts as Numbers and map to UI keys
+      setFees((res.data || []).map(f => ({
+        ...f,
+        id: f.student_id,
+        totalFees: Number(f.total_fees || 0),
+        paid: Number(f.paid_amount || 0),
+        remaining: Number(f.pending_amount || 0),
+        credit: Number(f.credit_balance || 0),
+        history: f.payment_history || [],
+        status: f.status || 'Pending',
+        dueDate: f.due_date || 'N/A'
+      })));
 
-  useEffect(() => {
-    localStorage.setItem('admin_master_fees_v3', JSON.stringify(fees));
-  }, [fees]);
+    } catch (err) {
+      console.error('[AdminDataContext] Failed to fetch fees:', err);
+    } finally {
+      setFeesLoading(false);
+    }
+  };
 
-  useEffect(() => {
-    localStorage.setItem('admin_master_courses_v5', JSON.stringify(courses));
-  }, [courses]);
+  useEffect(() => { 
+    if (['ADMIN', 'FEES_MANAGER'].includes(role)) refreshFees(); 
+  }, [role]);
 
-  useEffect(() => {
-    localStorage.setItem('admin_master_attendance_v3', JSON.stringify(attendanceLogs));
-  }, [attendanceLogs]);
+  // Courses → loaded from backend API
+  const [courses, setCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+
+  const refreshCourses = async () => {
+    try {
+      const res = await api.get('/courses/');
+      // Map backend shape → frontend shape with strict type parsing
+      setCourses((res.data || []).map(c => ({
+        id: c.id,
+        course_id: c.course_id,
+        name: c.course_name || 'Unnamed Course',   
+        course_name: c.course_name || 'Unnamed Course',
+        duration: c.duration || '',
+        fee: Number(c.total_fee || 0),
+        total_fee: Number(c.total_fee || 0),
+        institute: c.institute || '',
+        faculty: c.faculty || 'Unassigned',
+        status: c.status || 'Active',
+        enrollment: Number(c.enrollment || 0),
+        students: Number(c.enrollment || 0), // Alias for backward compatibility
+      })));
+    } catch (err) {
+      console.error('[AdminDataContext] Failed to fetch courses:', err);
+    } finally {
+      setCoursesLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+    if (['ADMIN', 'STUDENT_MANAGER', 'ATTENDANCE_MANAGER', 'COURSE_MANAGER', 'FEES_MANAGER'].includes(role)) {
+      refreshCourses();
+    }
+  }, [role]);
+
+
+  // Attendance -> DB (all-time logs for trends/dashboard)
+  const [attendanceLogs, setAttendanceLogs] = useState([]);
+  const refreshAttendance = async () => {
+    try {
+      const res = await api.get('/attendance/');
+      setAttendanceLogs(res.data || []);
+    } catch (err) {
+      console.error('[AdminDataContext] Failed to fetch attendance logs:', err);
+    }
+  };
+
+  useEffect(() => { 
+    if (['ADMIN', 'ATTENDANCE_MANAGER'].includes(role)) refreshAttendance(); 
+  }, [role]);
+
+  // Analytics -> DB Dashboard Stats
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const refreshDashboardStats = async () => {
+    try {
+      const res = await api.get('/analytics/dashboard');
+      setDashboardStats(res.data);
+    } catch (err) {
+      console.error('[AdminDataContext] Failed to fetch analytics:', err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+    if (role === 'ADMIN') refreshDashboardStats(); 
+  }, [role]);
+
+  // Helper to get faculty name by role (used for headers)
+  const getFacultyNameByRole = (roleKey) => {
+    // Map human readable titles (from AdminLayout) to backend roles
+    const ROLE_MAP = {
+      "STUDENT MANAGEMENT": "STUDENT_MANAGER",
+      "ATTENDANCE MANAGEMENT": "ATTENDANCE_MANAGER",
+      "COURSE MANAGEMENT": "COURSE_MANAGER",
+      "FEES MANAGEMENT": "FEES_MANAGER",
+      "STUDENT_MANAGER": "STUDENT_MANAGER",
+      "ATTENDANCE_MANAGER": "ATTENDANCE_MANAGER",
+      "COURSE_MANAGER": "COURSE_MANAGER",
+      "FEES_MANAGER": "FEES_MANAGER"
+    };
+
+    const targetRole = ROLE_MAP[roleKey.toUpperCase()] || roleKey;
+    const f = (faculties || []).find(fac => (fac.role || "").toUpperCase() === targetRole.toUpperCase());
+    return f ? f.name : "FACULTY";
+  };
 
   // Dynamic Chart Helpers using current state
   const getEnrollmentStats = (year, monthIndex) => {
-    const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"];
     const targetYear = year.toString();
-    const targetMonth = monthNamesShort[monthIndex];
+    const targetMonth = (monthIndex + 1).toString().padStart(2, '0');
+    const datePrefix = `${targetYear}-${targetMonth}`;
 
-    const filtered = students.filter(s => 
-      s.admissionDate.includes(targetMonth) && s.admissionDate.includes(targetYear)
+    const filtered = (students || []).filter(s => 
+      s.admissionDate?.startsWith(datePrefix)
     );
 
-    const courses = ["B-Tech (CS)", "B-Tech (CSE)", "B-Tech (AI)", "BSC (IT)", "MSC (IT) INT", "BCA"];
-    const colors = ['#4F46E5', '#7C3AED', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
+    const existingCourses = (courses || []).length > 0 
+      ? courses.map(c => c.name) 
+      : [...new Set(students.map(s => s.course))];
 
-    return courses.map((course, i) => {
-      const count = filtered.filter(s => s.course === course).length;
-      return { name: course, value: count, color: colors[i] };
+    const chartColors = ['#4F46E5', '#7C3AED', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6'];
+
+    return (existingCourses || []).map((courseName, i) => {
+      const count = filtered.filter(s => s.course === courseName).length;
+      return { 
+        name: courseName, 
+        value: count, 
+        color: chartColors[i % chartColors.length] 
+      };
     });
   };
 
   const currentFeeTrends = useMemo(() => {
-    const months = [
-      "JAN 25", "FEB 25", "MAR 25", "APR 25", "MAY 25", "JUN 25", 
-      "JUL 25", "AUG 25", "SEP 25", "OCT 25", "NOV 25", "DEC 25",
-      "JAN 26", "FEB 26", "MAR 26", "APR 26"
-    ];
-
-    return months.map((month, index) => {
-      const year = month.includes('25') ? '2025' : '2026';
-      const monthName = month.split(' ')[0];
-      
-      const actualCollection = fees.reduce((total, student) => {
-        const monthTransactions = student.history.filter(h => 
-          h.date.toUpperCase().includes(monthName.toUpperCase()) && h.date.includes(year)
-        );
-        return total + monthTransactions.reduce((sum, t) => sum + t.amount, 0);
-      }, 0);
-
-      const actual = actualCollection * 35; 
-      const margin = 0.1 + (Math.sin(index) * 0.05 + 0.05);
-      return { 
-        name: month, 
-        actual, 
-        projected: Math.round(actual * (1 + margin)) 
-      };
-    });
-  }, [fees]);
+    if (dashboardStats?.feeTrends) return dashboardStats.feeTrends;
+    return [];
+  }, [dashboardStats]);
 
   const currentAttendanceTrends = useMemo(() => {
-    const months = [
-        "JAN 25", "FEB 25", "MAR 25", "APR 25", "MAY 25", "JUN 25", 
-        "JUL 25", "AUG 25", "SEP 25", "OCT 25", "NOV 25", "DEC 25",
-        "JAN 26", "FEB 26", "MAR 26", "APR 26"
-    ];
+    if (dashboardStats?.attendanceTrends) return dashboardStats.attendanceTrends;
+    return [];
+  }, [dashboardStats]);
 
-    const monthFullNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const fetchFeeDetail = async (studentId) => {
+    try {
+      const res = await api.get(`/fees/${studentId}`);
+      const data = res.data;
+      // Enforce single source of truth mapping
+      return {
+        id: data.student_id,
+        name: data.name,
+        course: data.course,
+        totalFees: Number(data.total_fees || 0),
+        paid: Number(data.paid_amount || 0),
+        remaining: Number(data.pending_amount || 0),
+        credit: Number(data.credit_balance || 0),
+        dueDate: data.due_date || 'N/A',
+        history: data.payment_history || []
+      };
 
-    return months.map((monthStr, index) => {
-        const [mShort, yShort] = monthStr.split(' ');
-        const year = yShort === '25' ? '2025' : '2026';
-        const monthName = monthFullNames.find(m => m.toUpperCase().startsWith(mShort));
-        
-        // Find logs for this month/year
-        const monthLogs = attendanceLogs.filter(l => 
-            l.date.includes(`${year}-${(monthFullNames.indexOf(monthName) + 1).toString().padStart(2, '0')}`) ||
-            l.date.includes(monthName) && l.date.includes(year)
-        );
+    } catch (err) {
+      console.error('[AdminDataContext] fetchFeeDetail failed:', err);
+      return null;
+    }
+  };
 
-        let value;
-        if (monthLogs.length > 0) {
-            const present = monthLogs.filter(l => l.status === "Present").length;
-            value = Math.round((present / monthLogs.length) * 100);
-        } else {
-            // Mock historical trend (85-95%) for display consistency
-            const seed = (index * 7) % 10;
-            value = 85 + seed;
-        }
+  const makePayment = async (data) => {
+    try {
+      await api.post('/fees/pay', data);
+      await refreshFees(); // Sync global list
+      return { success: true };
+    } catch (err) {
+      console.error('[AdminDataContext] makePayment failed:', err);
+      if (err.response?.status === 400) {
+        return { success: false, message: err.response.data.detail };
+      }
+      return { success: false };
+    }
+  };
 
-        return { name: monthStr, value };
-    });
-  }, [attendanceLogs]);
+
+  const setDueDate = async (data) => {
+    try {
+      await api.post('/fees/due-date', data);
+      return { success: true };
+    } catch (err) {
+      console.error('[AdminDataContext] setDueDate failed:', err);
+      return { success: false };
+    }
+  };
 
   const value = {
     students,
     setStudents,
-    fees,
-    setFees,
+    studentsLoading,
+    refreshStudents,
     courses,
     setCourses,
+    coursesLoading,
+    refreshCourses,
+    fees,
+    setFees,
+    feesLoading,
+    refreshFees,
+    faculties,
+    facultiesLoading,
+    refreshFaculties,
     attendanceLogs,
     setAttendanceLogs,
+    refreshAttendance,
+    dashboardStats,
+    statsLoading,
+    refreshDashboardStats,
     getEnrollmentStats,
+    getFacultyNameByRole,
+    fetchFeeDetail,
+    makePayment,
+    setDueDate,
     feeTrends: currentFeeTrends,
     attendanceTrends: currentAttendanceTrends
   };
+
+
 
   return (
     <AdminDataContext.Provider value={value}>

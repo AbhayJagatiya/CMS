@@ -10,32 +10,35 @@
 
 ---
 
-## 👥 Meet Team falcoon_001
+## 👥 Meet Team falcoon_001 🦅
 
 We are a passionate team of developers dedicated to building robust and scalable educational solutions.
 
-| Member | Role |
-| :--- | :--- |
-| **Abhay** | Full Stack Engineer |
-| **Charitarth** | Frontend Architect |
-| **Vansh** | Backend Specialist |
-| **Nandani** | UI/UX Designer |
+| Member         | Role                |
+| :------------- | :------------------ |
+| **Abhay**      | Full Stack Engineer |
+| **Charitarth** | Frontend Architect  |
+| **Vansh**      | Backend Specialist  |
+| **Nandani**    | UI/UX Designer      |
 
 ---
 
 ## ✨ Core Features
 
 ### 🏛️ Administration
+
 - **Dashboard Analytics**: Real-time visualization of college metrics.
 - **Role Management**: Granular control over permissions for Admin, Faculty, and Students.
 - **Resource Tracking**: Centralized management of college assets.
 
 ### 🍎 Academic Management
+
 - **Student Lifecycle**: From enrollment to graduation tracking.
 - **Attendance System**: Interactive and automated attendance logging.
 - **Course Catalog**: Dynamic course and curriculum management.
 
 ### 💰 Financials
+
 - **Fees Management**: Transparent fee structures and transaction history.
 - **Automated Alerts**: Notification system for pending dues and schedules.
 
@@ -68,11 +71,13 @@ CMS/
 ## 🛠️ Installation & Setup
 
 ### 📦 Prerequisites
+
 - **Node.js** (v18 or higher)
 - **Python** (v3.9 or higher)
 - **PostgreSQL** running locally
 
 ### 🔌 Backend (FastAPI)
+
 1. **Navigate & Environment**:
    ```bash
    cd backend
@@ -96,6 +101,7 @@ CMS/
    ```
 
 ### 💻 Frontend (React + Vite)
+
 1. **Navigate**:
    ```bash
    cd frontend
@@ -109,15 +115,18 @@ CMS/
 ---
 
 ## 🌐 API Documentation
+
 Once the backend is running, you can explore the interactive API docs:
+
 - **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Redoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
 ## 🔒 Security & Standards
+
 - **Authentication**: Stateless JWT token-based authentication.
 - **Hashing**: Industry-standard Bcrypt for password security.
 - **Clean Code**: Follows PEP8 for Python and ESLint for JavaScript.
 
 ---
 
-*Built with ❤️ by team falcoon_001. For inquiries, please contact the repository owners.*
+_Built with ❤️ by team falcoon_001. For inquiries, please contact the repository owners._

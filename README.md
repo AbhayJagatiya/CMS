@@ -1,4 +1,4 @@
-# <align="center">🦅 College Management System (CMS)</align>
+# <align="center">🎓 College Management System (CMS)</align>
 
 <p align="center">
   <img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="FastAPI" />
@@ -18,33 +18,35 @@
 
 ## 👥 Meet Team falcoon_001 🦅
 
-A group of innovative developers committed to building high-performance academic solutions.
-
-- **Abhay** — *Full Stack Development*
-- **Charitarth** — *Frontend Architecture & UI/UX*
-- **Vansh** — *Backend Logic & Database Design*
-- **Nandani** — *Quality Assurance & Documentation*
+- **Abhay**
+- **Charitarth**
+- **Vansh**
+- **Nandani**
 
 ---
 
 ## 🔥 Key Modules & Features
 
 ### 🔐 1. Security & Role-Based Access (RBAC)
+
 - **Multi-Role Login**: Dedicated portals for **Admin** and **Faculty**.
 - **Industry Standards**: Secure password hashing via **Bcrypt** and stateless authentication using **JWT Tokens**.
 - **Protected Routes**: Granular permission control ensuring that data remains secure and accessible only to authorized roles.
 
 ### 📅 2. Advanced Attendance Tracking
+
 - **Interactive Daily Logs**: Faculty can mark attendance with a single click using a smart "Toggle" mechanism.
 - **Auto-Absent Logic**: Intelligent backend queries that automatically list all students and default their status until updated.
 - **History & Trends**: View detailed attendance calendars for individual students.
 
 ### 💰 3. Financial & Fees Management
-- **Real-Time Calculation**: Dynamic calculation of *Paid*, *Pending*, and *Credit* balances for every student.
+
+- **Real-Time Calculation**: Dynamic calculation of _Paid_, _Pending_, and _Credit_ balances for every student.
 - **Payment History**: Comprehensive reporting of transaction dates, amounts, and payment methods (Cash, Online, etc.).
 - **Deadlines**: Course-specific due dates with automated status updates (Paid/Pending).
 
 ### 📊 4. Analytical Dashboard
+
 - **Live Stats**: Instant counters for Student enrollment, Active courses, and Total collection.
 - **Visual Trends**: Charts showing monthly attendance performance and fee collection growth.
 - **Top Performers**: Automatic ranking of students based on academic presence.
@@ -72,10 +74,12 @@ CMS/
 ## 🛠️ Installation & Setup
 
 ### 📦 Prerequisites
+
 - **Python 3.9+** & **Node.js 18+**
 - **PostgreSQL** (Database)
 
 ### 🔌 Backend Setup
+
 1. **Prepare Environment**:
    ```bash
    cd backend
@@ -91,6 +95,7 @@ CMS/
    Update your `.env` file with your PostgreSQL credentials.
 
 ### 💻 Frontend Setup
+
 1. **Launch App**:
    ```bash
    cd frontend
@@ -103,12 +108,14 @@ CMS/
 ## 🌐 API Documentation
 
 Explore our interactive API blueprints:
+
 - **Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Redoc Docs**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
 ---
 
 ## 🛡️ Standards & Quality
+
 - **Performance**: Built with **Vite** for ultra-fast frontend rendering.
 - **Scalability**: Backend designed with **FastAPI** for high concurrency.
 - **Clean Code**: Adheres strictly to **PEP 8** (Python) and modern **React hooks** patterns.

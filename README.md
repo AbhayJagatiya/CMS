@@ -10,16 +10,12 @@
 
 ---
 
-## 👥 Meet Team falcoon_001 🦅
+## 👥 Team falcoon_001 🦅
 
-We are a passionate team of developers dedicated to building robust and scalable educational solutions.
-
-| Member         | Role                |
-| :------------- | :------------------ |
-| **Abhay**      | Full Stack Engineer |
-| **Charitarth** | Frontend Architect  |
-| **Vansh**      | Backend Specialist  |
-| **Nandani**    | UI/UX Designer      |
+- Abhay
+- Charitarth
+- Vansh
+- Nandani
 
 ---
 

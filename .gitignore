@@ -1,33 +1,31 @@
-# Dependencies
+﻿# ==============================================================================
+# CMS PROJECT - MASTER GITIGNORE
+# ==============================================================================
+
+# 📦 Dependencies & Packages
 node_modules/
 venv/
 env/
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
-# Build artifacts
+# 🛠️ Build & Compiled Files
 dist/
 build/
 .vite/
 *.log
 
-# Python cache and temporary files
+# 🐍 Python Specific
 __pycache__/
 *.py[cod]
-*$py.class
 .pytest_cache/
-.coverage
-htmlcov/
 
-# IDEs and OS files
+# 🔐 Secrets & Environment Variables
+.env*
+backend/.env
+frontend/.env
+
+# 💻 IDEs & Editors
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-
-# Project specific
-backend/.env
-frontend/.env

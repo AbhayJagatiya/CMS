@@ -1,65 +1,70 @@
-# 🎓 College Management System (CMS)
+# <align="center">🦅 College Management System (CMS)</align>
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-
-> A sophisticated, enterprise-grade College Management System designed to streamline administrative tasks, enhance faculty productivity, and provide students with a seamless academic experience.
-
----
-
-## 👥 Team falcoon_001 🦅
-
-- Abhay
-- Charitarth
-- Vansh
-- Nandani
+<p align="center">
+  <img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
+  <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="TailwindCSS" />
+  <img src="https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
+</p>
 
 ---
 
-## ✨ Core Features
+## 📖 Overview
 
-### 🏛️ Administration
+**CMS (College Management System)** is a robust, enterprise-grade platform designed for modern educational institutions. It simplifies complex administrative tasks, automates student tracking, and provides real-time financial insights through a sophisticated dashboard.
 
-- **Dashboard Analytics**: Real-time visualization of college metrics.
-- **Role Management**: Granular control over permissions for Admin, Faculty, and Students.
-- **Resource Tracking**: Centralized management of college assets.
+---
 
-### 🍎 Academic Management
+## 👥 Meet Team falcoon_001 🦅
 
-- **Student Lifecycle**: From enrollment to graduation tracking.
-- **Attendance System**: Interactive and automated attendance logging.
-- **Course Catalog**: Dynamic course and curriculum management.
+A group of innovative developers committed to building high-performance academic solutions.
 
-### 💰 Financials
+- **Abhay** — *Full Stack Development*
+- **Charitarth** — *Frontend Architecture & UI/UX*
+- **Vansh** — *Backend Logic & Database Design*
+- **Nandani** — *Quality Assurance & Documentation*
 
-- **Fees Management**: Transparent fee structures and transaction history.
-- **Automated Alerts**: Notification system for pending dues and schedules.
+---
+
+## 🔥 Key Modules & Features
+
+### 🔐 1. Security & Role-Based Access (RBAC)
+- **Multi-Role Login**: Dedicated portals for **Admin** and **Faculty**.
+- **Industry Standards**: Secure password hashing via **Bcrypt** and stateless authentication using **JWT Tokens**.
+- **Protected Routes**: Granular permission control ensuring that data remains secure and accessible only to authorized roles.
+
+### 📅 2. Advanced Attendance Tracking
+- **Interactive Daily Logs**: Faculty can mark attendance with a single click using a smart "Toggle" mechanism.
+- **Auto-Absent Logic**: Intelligent backend queries that automatically list all students and default their status until updated.
+- **History & Trends**: View detailed attendance calendars for individual students.
+
+### 💰 3. Financial & Fees Management
+- **Real-Time Calculation**: Dynamic calculation of *Paid*, *Pending*, and *Credit* balances for every student.
+- **Payment History**: Comprehensive reporting of transaction dates, amounts, and payment methods (Cash, Online, etc.).
+- **Deadlines**: Course-specific due dates with automated status updates (Paid/Pending).
+
+### 📊 4. Analytical Dashboard
+- **Live Stats**: Instant counters for Student enrollment, Active courses, and Total collection.
+- **Visual Trends**: Charts showing monthly attendance performance and fee collection growth.
+- **Top Performers**: Automatic ranking of students based on academic presence.
 
 ---
 
 ## 📂 Project Structure
 
-```text
+```bash
 CMS/
-├── backend/                # FastAPI Application
-│   ├── app/                # Core logic & routes
-│   │   ├── admin/          # Faculty & Admin services
-│   │   ├── auth/           # JWT & Bcrypt security
-│   │   ├── students/       # Student management
-│   │   └── ...             # Other modules
-│   ├── requirements.txt    # Python dependencies
-│   └── seed.py             # Database initialization script
-├── frontend/               # React (Vite) Application
-│   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   ├── context/        # Global state management
-│   │   ├── pages/          # View transitions & layouts
-│   │   └── lib/            # API & external utilities
-│   └── package.json        # Node.js dependencies
-└── README.md               # You are here!
+├── backend/                # FastAPI Core Application
+│   ├── app/                # Main logic (Auth, Admin, Fees, etc.)
+│   ├── requirements.txt    # Python environments
+│   └── start_server.py     # Entry point script
+├── frontend/               # React + Vite Application
+│   ├── src/                # UI source code
+│   │   ├── components/     # Reusable logic components
+│   │   └── pages/          # Admin & Faculty dashboards
+│   └── package.json        # Node dependency manifest
+└── README.md               # Project documentation
 ```
 
 ---
@@ -67,43 +72,28 @@ CMS/
 ## 🛠️ Installation & Setup
 
 ### 📦 Prerequisites
+- **Python 3.9+** & **Node.js 18+**
+- **PostgreSQL** (Database)
 
-- **Node.js** (v18 or higher)
-- **Python** (v3.9 or higher)
-- **PostgreSQL** running locally
-
-### 🔌 Backend (FastAPI)
-
-1. **Navigate & Environment**:
+### 🔌 Backend Setup
+1. **Prepare Environment**:
    ```bash
    cd backend
    python -m venv venv
-   # Windows: venv\Scripts\activate | Unix: source venv/bin/activate
+   source venv/bin/activate  # On Windows use: venv\Scripts\activate
    ```
-2. **Install Dependencies**:
+2. **Install & Initialize**:
    ```bash
    pip install -r requirements.txt
+   python seed.py           # Injects initial admin & sample data
    ```
-3. **Database Config**:
-   Create a `.env` in `backend/` and add:
-   ```env
-   DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/college_db"
-   SECRET_KEY="YOUR_SUPER_SECRET_KEY"
-   ```
-4. **Seed & Launch**:
-   ```bash
-   python seed.py
-   python -m uvicorn app.main:app --reload
-   ```
+3. **Connect Database**:
+   Update your `.env` file with your PostgreSQL credentials.
 
-### 💻 Frontend (React + Vite)
-
-1. **Navigate**:
+### 💻 Frontend Setup
+1. **Launch App**:
    ```bash
    cd frontend
-   ```
-2. **Install & Run**:
-   ```bash
    npm install
    npm run dev
    ```
@@ -112,17 +102,20 @@ CMS/
 
 ## 🌐 API Documentation
 
-Once the backend is running, you can explore the interactive API docs:
-
-- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Redoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-
-## 🔒 Security & Standards
-
-- **Authentication**: Stateless JWT token-based authentication.
-- **Hashing**: Industry-standard Bcrypt for password security.
-- **Clean Code**: Follows PEP8 for Python and ESLint for JavaScript.
+Explore our interactive API blueprints:
+- **Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Redoc Docs**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
 ---
 
-_Built with ❤️ by team falcoon_001. For inquiries, please contact the repository owners._
+## 🛡️ Standards & Quality
+- **Performance**: Built with **Vite** for ultra-fast frontend rendering.
+- **Scalability**: Backend designed with **FastAPI** for high concurrency.
+- **Clean Code**: Adheres strictly to **PEP 8** (Python) and modern **React hooks** patterns.
+
+---
+
+<p align="center">
+  <i>Developed with ❤️ for excellence in Education Technology.</i><br>
+  <strong>Team falcoon_001</strong>
+</p>

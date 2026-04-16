@@ -1,4 +1,8 @@
-# <align="center">🎓 College Management System (CMS)</align>
+<h1 align="center">🎓 College Management System (CMS)</h1>
+
+<p align="center">
+🚀 A production-ready full-stack College Management System with analytics, attendance, and financial modules.
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="FastAPI" />

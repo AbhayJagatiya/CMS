@@ -6,3 +6,6 @@ python-multipart
 sqlalchemy
 psycopg2-binary
 pydantic-settings
+pymongo[srv]
+groq>=0.5.0
+python-dotenv

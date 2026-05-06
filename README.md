@@ -361,17 +361,6 @@ FastAPI automatically generates API documentation.
 
 ---
 
-# 🔐 Default Credentials
-
-| Role | Email | Password |
-|---|---|---|
-| ADMIN | admin@gmail.com | Admin123 |
-| STUDENT | student@gmail.com | Student123 |
-| ATTENDANCE | attendance@gmail.com | Attendance123 |
-| COURSE | course@gmail.com | Course123 |
-| FEES | fees@gmail.com | Fees123 |
-
----
 
 # 📈 Performance & Quality Standards
 

@@ -136,7 +136,7 @@ The system follows a strict permission-based architecture.
 > Add your backend architecture image inside the repository and keep its name as `architecture.png`
 
 <p align="center">
-  <img src="./architecture.png" alt="Architecture Diagram" width="100%">
+  <img src="architecture.png" alt="System Architecture" width="100%">
 </p>
 
 ---
